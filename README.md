@@ -34,7 +34,13 @@ The TEF6686 requires a firmware initialization array to function correctly. This
 
 **For copyright compliance, this repository does not include this file.**
 
-To compile this project, you must legally acquire the `DSP_INIT.h` file yourself and place it directly in the same folder as this project's `.ino` file. The file must contain the initialization array formatted for Arduino (e.g., `const uint8_t DSP_INIT[] PROGMEM = {...}`). The software will not compile without it.
+To compile this project, you must legally acquire the `DSP_INIT.h` file yourself and place it directly in the same folder as this project's `.ino` file. The software will not compile without it.
+
+**How to find it:**
+Because this chip is heavily used by the DIY radio community, the initialization array is widely documented online.
+*   Search your preferred search engine or open-source code repositories for the term: `DSP_INIT tef6686`.
+*   Look for a C++ header file containing the array (it usually starts with `const uint8_t DSP_INIT[] PROGMEM = { ... }`).
+*   Copy that file into your local project directory.
 
 ### 2. `stations_db.js` (The Offline Station Database)
 The Web GUI supports an offline database for station identification, but it relies on a local JavaScript file that you must create.
