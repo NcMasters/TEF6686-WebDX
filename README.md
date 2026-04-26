@@ -12,6 +12,7 @@ This project transforms your TEF6686 module into a professional-grade DXing tool
 *   **Ultra-RDS DX Mode**: Maximizes RDS sensitivity for weak signals using forced mono, fixed 56kHz bandwidth, and statistical decoding to eliminate ghost characters.
 *   **Live Audio Web Monitor**: Stream the radio audio directly through your browser using your PC's soundcard/line-in.
 *   **Advanced DSP Control**: Granular control over Channel EQ, Multipath Mitigation (iMS), Audio Noise Blanker, and dynamic High/Low-cut filters.
+*   **Privacy First**: No hardcoded WiFi credentials or GPS coordinates. All sensitive data is handled dynamically or stored securely in the device's persistent memory.
 
 ## 🔌 Hardware & Wiring
 
@@ -66,9 +67,10 @@ const defaultStationsData = `Freq, Name, Genre
 1.  Plug the ESP32-C3 into your computer via USB.
 2.  Open the `radio.html` file in any modern web browser (Chrome, Edge, or Chromium-based browsers are required for Web Serial support).
 3.  Click the **CONNECT** button and select the serial port for your ESP32-C3.
-4.  Click **BLITZ SWEEP** to populate the spectrum graph and start DXing!
+4.  Open the **Settings (⚙️)** menu to configure your WiFi SSID and Password. These will be saved permanently to the device.
+5.  Click **BLITZ SWEEP** to populate the spectrum graph and start DXing!
 
-*(Note: If you configure your WiFi credentials in the .ino file, you can also navigate to http://tef6686.local on your network to use the interface wirelessly).*
+*(Note: Once WiFi is configured, you can also navigate to http://tef6686.local on your network to use the interface wirelessly. The GUI will automatically detect your location for station identification, or you can set manual coordinates in the settings menu).*
 
 ## ⚖️ Legal & Acknowledgments
 
