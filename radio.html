@@ -1,0 +1,3731 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>TEF6686 DX ANALYZER PRO</title>
+    <meta name="description" content="Professional spectrum analyzer for TEF6686 radio">
+    <style>
+        :root {
+            --bg: #050505;
+            --surface: #121212;
+            --accent: #00ffaa;
+            --text: #e0e0e0;
+            --dim: #555;
+            --warn: #ffcc00;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            margin: 0;
+            padding: 15px;
+            overflow: hidden;
+        }
+
+        .bw-select {
+            background: #1a1a1a !important;
+            color: #ffffff !important;
+            border: 1px solid #333 !important;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            outline: none;
+            padding: 2px 4px;
+        }
+
+        .bw-select option {
+            background: #1a1a1a;
+            color: #ffffff;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 15px;
+            max-width: 1800px;
+            margin: auto;
+            height: 96vh;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid #222;
+            border-radius: 4px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .freq-readout h1 {
+            font-family: 'Consolas', monospace;
+            font-size: 82px;
+            margin: 0;
+            letter-spacing: -4px;
+            color: #fff;
+            font-variant-numeric: tabular-nums;
+            line-height: 1;
+        }
+
+        .freq-readout .unit {
+            font-size: 18px;
+            color: var(--dim);
+            margin-left: 10px;
+        }
+
+        .rds-ps {
+            font-family: monospace;
+            font-size: 24px;
+            color: var(--accent);
+            background: #000;
+            padding: 8px 15px;
+            border-radius: 3px;
+            min-width: 150px;
+            text-align: center;
+            border: 1px solid #222;
+        }
+
+        .dash-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .dash-item {
+            background: #080808;
+            border: 1px solid #1a1a1a;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .d-label {
+            font-size: 9px;
+            color: var(--dim);
+            text-transform: uppercase;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .d-val {
+            font-size: 16px;
+            font-weight: bold;
+            font-family: monospace;
+            color: var(--accent);
+            font-variant-numeric: tabular-nums;
+        }
+
+        #stereoVal {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+            text-align: center;
+            width: 100%;
+        }
+
+        .analyzer-frame {
+            background: #000;
+            border: 1px solid #1a1a1a;
+            position: relative;
+            flex-grow: 1;
+            margin: 10px 0;
+            cursor: grab;
+            overflow: hidden;
+        }
+
+        .analyzer-frame:active {
+            cursor: grabbing;
+        }
+
+        /* Status Badges */
+        .status-badge {
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            display: none;
+            margin-right: 5px;
+        }
+
+        .badge-mute {
+            background: #ff4444;
+            color: #fff;
+            animation: blink 1s infinite;
+        }
+
+        .badge-sleep {
+            background: #3b82f6;
+            color: #fff;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        /* RDS Rolling Text */
+        .status-badge.badge-ultra {
+            background: rgba(255, 215, 0, 0.1);
+            color: #ffd700;
+            border-color: #ffd700;
+            animation: pulse-ultra 2s infinite;
+            display: none;
+        }
+
+        @keyframes pulse-ultra {
+            0% {
+                box-shadow: 0 0 0px #ffd700;
+            }
+
+            50% {
+                box-shadow: 0 0 8px #ffd700;
+            }
+
+            100% {
+                box-shadow: 0 0 0px #ffd700;
+            }
+        }
+
+        .rds-char-weak {
+            color: #ff4444;
+        }
+
+        .rds-char-med {
+            color: #ffd700;
+        }
+
+        .rds-char-strong {
+            color: var(--accent);
+        }
+
+        .btn-ultra {
+            background: linear-gradient(135deg, #1a1a1a 0%, #332200 100%);
+            border: 1px solid #ffd700;
+            color: #ffd700;
+            font-weight: bold;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-ultra.active {
+            background: #ffd700;
+            color: #000;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+        }
+
+        .rds-container {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            width: 200px;
+        }
+
+        .rds-scroller {
+            width: 100%;
+            height: 22px;
+            overflow: hidden;
+            background: #000;
+            border: 1px solid #222;
+            border-radius: 3px;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .rds-track {
+            white-space: nowrap;
+            position: absolute;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            color: var(--accent);
+            padding-left: 100%;
+            display: inline-block;
+        }
+
+        .animate-scroll {
+            animation: rds-scroll 15s linear infinite;
+        }
+
+        @keyframes rds-scroll {
+            0% {
+                transform: translateX(0);
+            }
+
+            100% {
+                transform: translateX(-100%);
+            }
+        }
+
+        #mainCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .nav-hint {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-size: 9px;
+            color: #333;
+            pointer-events: none;
+        }
+
+        .control-bar {
+            display: flex;
+            gap: 10px;
+            padding-top: 15px;
+            border-top: 1px solid #222;
+            flex-wrap: wrap;
+        }
+
+        .tune-box {
+            display: flex;
+            align-items: center;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .tune-box input {
+            background: transparent;
+            border: none;
+            color: #fff;
+            padding: 10px;
+            width: 110px;
+            font-family: monospace;
+            text-align: center;
+            outline: none;
+            font-size: 16px;
+        }
+
+        .step-btn {
+            background: #111;
+            color: var(--dim);
+            border: none;
+            border-left: 1px solid #222;
+            padding: 10px 8px;
+            font-size: 10px;
+            font-family: monospace;
+            cursor: pointer;
+            transition: color 0.15s;
+            white-space: nowrap;
+        }
+
+        .step-btn:hover {
+            color: var(--accent);
+        }
+
+        .btn {
+            background: #1a1a1a;
+            color: #fff;
+            border: 1px solid #333;
+            padding: 10px 18px;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .btn-active {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+
+        .btn-status {
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 3px;
+            background: #222;
+            color: var(--dim);
+        }
+
+        .log-area {
+            flex: 1;
+            min-height: 0;
+            background: #000;
+            border: 1px solid #1a1a1a;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 10px;
+            color: #666;
+        }
+
+        .log-row {
+            border-bottom: 1px solid #111;
+            padding: 5px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .log-row b {
+            color: var(--accent);
+        }
+
+        .filter-section {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #222;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+
+        .filter-row label {
+            font-size: 9px;
+            color: var(--dim);
+            text-transform: uppercase;
+            min-width: 55px;
+        }
+
+        .filter-select {
+            flex: 1;
+            background: #080808;
+            color: var(--text);
+            border: 1px solid #333;
+            border-radius: 3px;
+            padding: 5px 8px;
+            font-size: 11px;
+            font-family: 'Inter', system-ui, sans-serif;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .filter-select:focus {
+            border-color: var(--accent);
+        }
+
+        .tag-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        .tag-pill {
+            background: #1a1a1a;
+            color: var(--dim);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 2px 10px;
+            font-size: 9px;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .tag-pill:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .tag-pill.active {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+
+        .station-count {
+            font-size: 9px;
+            color: var(--dim);
+            text-align: right;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Tutorial Polish */
+        .tut-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--dim);
+            transition: all 0.3s ease;
+        }
+
+        .tut-dot.active {
+            background: var(--accent);
+            transform: scale(1.3);
+            box-shadow: 0 0 8px var(--accent);
+        }
+
+        .tut-arrow {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: var(--surface);
+            border: 1px solid var(--accent);
+            transform: rotate(45deg);
+            z-index: -1;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tut-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            color: var(--dim);
+            font-size: 20px;
+            cursor: pointer;
+            line-height: 1;
+            transition: color 0.2s;
+            background: none;
+            border: none;
+            padding: 5px;
+        }
+
+        .tut-close:hover {
+            color: #fff;
+        }
+
+        .tut-skip-link {
+            font-size: 10px;
+            color: var(--dim);
+            text-decoration: underline;
+            cursor: pointer;
+            margin-top: 10px;
+            display: inline-block;
+            transition: color 0.2s;
+        }
+
+        .tut-skip-link:hover {
+            color: var(--accent);
+        }
+    </style>
+    <script src="stations_db.js"></script>
+</head>
+
+<body>
+    <div id="tutOverlay"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:10000; pointer-events:auto; overflow:hidden; backdrop-filter: blur(8px); background: rgba(0,0,0,0.3);">
+    </div>
+    <div id="tutTooltip" role="dialog" aria-modal="true" aria-labelledby="tutTitle" aria-describedby="tutText"
+        style="display:none; position:fixed; background:var(--surface); border:1px solid var(--accent); padding:24px; border-radius:12px; width:320px; box-shadow: 0 20px 60px rgba(0,0,0,0.9); pointer-events:auto; transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); opacity:0; z-index:10002; min-height:100px; flex-direction: column;">
+        <button class="tut-close" onclick="nextTutStep(true)" aria-label="Close Tutorial">×</button>
+        <div id="tutArrow" class="tut-arrow"></div>
+        <h4 id="tutTitle"
+            style="color:var(--accent); margin:0 0 10px 0; font-size:15px; text-transform:uppercase; letter-spacing:1.5px; font-weight:bold; border-bottom: 1px solid #222; padding-bottom: 10px;">
+            Feature Title</h4>
+        <div id="tutText" aria-live="polite" style="color:#e0e0e0; font-size:14px; line-height:1.6; margin:0 0 15px 0;">
+            Description goes here.</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:auto;">
+            <div style="display:flex; flex-direction:column; gap:5px;">
+                <div id="tutDots" style="display:flex; gap:6px; margin-bottom:5px;"></div>
+                <span id="tutStepLabel"
+                    style="font-size:11px; color:#aaa; font-family:monospace; font-weight:bold;"></span>
+                <span class="tut-skip-link" onclick="nextTutStep(true)">SKIP TUTORIAL</span>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn" id="tutPrevBtn" onclick="prevTutStep()"
+                    style="padding:10px 18px; font-size:11px; background:rgba(255,255,255,0.08); border-color:#444; color:#e0e0e0;">BACK</button>
+                <button class="btn btn-active" id="tutNextBtn" onclick="nextTutStep()"
+                    style="padding:10px 25px; font-size:11px; box-shadow: 0 4px 15px rgba(0,255,170,0.3);">NEXT
+                    STEP</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="layout">
+        <div class="card">
+            <div class="header-row">
+                <div class="freq-readout" style="min-width: 140px;">
+                    <h1 id="fMain" style="margin:0; font-size: 38px; letter-spacing: -1px;">00.00</h1><span class="unit"
+                        id="uMain">MHz</span>
+                </div>
+                <div
+                    style="flex:1; margin: 0 30px; height: 55px; position:relative; overflow:hidden; border-radius:4px; background: rgba(0,0,0,0.3);">
+                    <canvas id="headerVisualizer" style="width:100%; height:100%;"></canvas>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                    <div style="display:flex; gap:5px; margin-bottom:2px;">
+                        <span id="badgeUltra" class="status-badge badge-ultra">ULTRA-RDS</span>
+                        <span id="badgeSleep" class="status-badge badge-sleep">I2C SLEEP</span>
+                        <span id="badgeMute" class="status-badge badge-mute">MUTE</span>
+                    </div>
+                    <div class="rds-container">
+                        <div id="psMain" class="rds-ps">OFFLINE</div>
+                        <div class="rds-scroller">
+                            <div id="rdsRTHeader" class="rds-track">... STANDBY ...</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                    <div style="display:flex;gap:5px">
+                        <div id="sysStatus" class="btn-status">READY</div>
+                        <button class="btn btn-status" onclick="openAdvanced()" style="padding:4px;min-width:auto"
+                            title="Advanced Startup Settings">⚙️</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dash-grid" id="metricsGrid">
+                <div class="dash-item" title="Current tuning band (FM/AM)"><span class="d-label">Mode</span><span
+                        class="d-val" id="modeVal">--</span></div>
+                <div class="dash-item" id="dash_audio" title="Stereo status and dynamic separation blend (0-100%)"><span
+                        class="d-label">Audio</span><span class="d-val" id="stereoVal">--</span></div>
+                <div class="dash-item" title="Audio volume level in decibels"><span class="d-label">Volume</span><span
+                        class="d-val" id="volVal">--</span><small>dB</small></div>
+                <div class="dash-item" title="Received Signal Strength Indicator (signal power)"><span
+                        class="d-label">RSSI</span><span class="d-val" id="sigVal">0.0</span><small>dBµV</small></div>
+                <div class="dash-item" title="Frequency offset from the tuned center"><span
+                        class="d-label">Offset</span><span class="d-val" id="offVal">0.0</span><small>kHz</small></div>
+                <div class="dash-item" title="Signal-to-Noise Ratio (signal purity)"><span
+                        class="d-label">SNR</span><span class="d-val" id="snrVal">--</span><small>dB</small></div>
+                <div class="dash-item" title="Intermediate Frequency Bandwidth or Quality Indicator"><span
+                        class="d-label" id="bwLabel">IF BW</span><span class="d-val" id="bwVal">--</span><small
+                        id="bwUnit">kHz</small></div>
+                <div class="dash-item" id="dash_usn" title="Ultrasonic Noise (multipath/interference indicator)"><span
+                        class="d-label">USN</span><span class="d-val" id="usnVal">0.0</span><small>%</small></div>
+                <div class="dash-item" id="dash_wam" title="Wideband Amplitude Modulation (multipath indicator)"><span
+                        class="d-label">WAM</span><span class="d-val" id="wamVal">0.0</span><small>%</small></div>
+                <div class="dash-item" title="Modulation level (audio loudness)"><span class="d-label">Mod</span><span
+                        class="d-val" id="modVal">0.0</span><small>%</small></div>
+                <div class="dash-item" title="Calculated tuning stability based on frequency offset"><span
+                        class="d-label">Stability</span><span class="d-val" id="stabVal">0</span><small>%</small></div>
+            </div>
+
+            <div class="rds-panel" id="rdsPanel"
+                style="display:none; background:#080808; border:1px solid #1a1a1a; padding:10px; margin-bottom:15px; border-radius:4px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+                    <span class="d-label" style="margin:0; color:var(--accent)"
+                        title="Program Service (PS): De 8 tegn, der viser stationens navn.">Radio Data System
+                        (RDS)</span>
+                    <div style="display:flex; gap:8px;">
+                        <span id="rdsTP"
+                            title="Traffic Program (TP): Fortæller radioen, at stationen sender trafikmeldinger."
+                            style="font-size:10px; padding:2px 4px; border-radius:2px; background:#222; color:#555; font-weight:bold; cursor:help;">TP</span>
+                        <span id="rdsTA"
+                            title="Traffic Announcement (TA): Fortæller radioen, at stationen aktuelt udsender en trafikmelding."
+                            style="font-size:10px; padding:2px 4px; border-radius:2px; background:#222; color:#555; font-weight:bold; cursor:help;">TA</span>
+                    </div>
+                </div>
+                <div id="rdsRTPanel"
+                    title="Radio Text (RT): En længere tekstlinje på op til 64 tegn. Her ser du ofte sangtitel, kunstner eller et telefonnummer."
+                    style="font-family:monospace; font-size:14px; color:#fff; min-height:20px; margin-bottom:8px; white-space:pre-wrap; word-break:break-word; cursor:help;">
+                    Waiting for Radio Text...</div>
+                <div
+                    style="display:flex; justify-content:space-between; font-size:11px; color:#aaa; font-family:monospace; cursor:help;">
+                    <span
+                        title="Program Identification (PI): Den unikke 4-cifrede kode. Det er den, radioen bruger til at vide, at det er den samme station, selvom frekvensen skifter.">PI:
+                        <b id="rdsPI" style="color:var(--accent)">----</b></span>
+                    <span
+                        title="Program Type (PTY): Kategoriserer indholdet (f.eks. Pop Music, News eller Talk), så du kan søge efter specifikke genrer.">PTY:
+                        <b id="rdsPTY" style="color:var(--accent)">None</b></span>
+                    <span
+                        title="Alternative Frequencies (AF): En liste over andre frekvenser, der sender det samme program.">AF:
+                        <b id="rdsAF" style="color:var(--accent)">0</b></span>
+                    <span id="rdsCT"
+                        title="Clock Time (CT): Sender den præcise tid og dato, så din radio automatisk indstiller uret.">--:--</span>
+                </div>
+            </div>
+
+            <div class="analyzer-frame" id="canvasWrapper">
+                <canvas id="mainCanvas"></canvas>
+                <span class="nav-hint">DRAG TO PAN | SCROLL TO ZOOM | CLICK PEAK TO TUNE</span>
+            </div>
+
+            <div class="control-bar">
+                <button class="btn" id="modeBtn" onclick="toggleConnectionMode()"
+                    style="min-width:60px;background:#111;border-color:#555;font-size:10px"
+                    title="Switch between USB Serial (noise-free wired) and WiFi WebSocket (wireless)">⚡ USB</button>
+                <button class="btn" style="background:#004422;border-color:var(--accent)" id="connBtn"
+                    title="Connect to the radio">CONNECT</button>
+                <input type="text" id="wifiIpInput" placeholder="tef6686.local"
+                    style="display:none;background:#000;border:1px solid #333;border-radius:4px;color:#fff;padding:8px 10px;font-family:monospace;font-size:12px;width:140px;text-align:center;outline:none"
+                    value="tef6686.local">
+                <div class="tune-box">
+                    <button class="step-btn" onclick="stepFreq(-100)">-1</button>
+                    <button class="step-btn" onclick="stepFreq(-10)">-.1</button>
+                    <input type="text" id="manualInput" placeholder="101.70">
+                    <button class="step-btn" onclick="stepFreq(+10)">+.1</button>
+                    <button class="step-btn" onclick="stepFreq(+100)">+1</button>
+                    <button class="btn" onclick="manualTune()" style="border:none;border-left:1px solid #333"
+                        title="Manually tune to the frequency entered">TUNE</button>
+                </div>
+                <button class="btn" onclick="send('v')">VOL+</button>
+                <button class="btn" onclick="send('b')">VOL-</button>
+                <button class="btn btn-status" id="muteBtn" onclick="toggleMute()" style="min-width: 60px"
+                    title="Hardware audio mute toggle">MUTE</button>
+                <button class="btn btn-status" id="listenBtn" onclick="toggleListen()" style="min-width: 80px"
+                    title="Play radio audio through browser speakers (Web Monitor)">LISTEN OFF</button>
+
+                <div
+                    style="display:flex; align-items:center; background:#111; border:1px solid #333; border-radius:4px; padding:0 8px; margin:0 4px;">
+                    <span style="font-size:9px; color:#aaa; margin-right:6px; font-weight:bold; white-space:nowrap">BW
+                        FILTER</span>
+                    <select id="bwSelector" class="bw-select" onchange="updateBandwidth(this.value)">
+                    </select>
+                </div>
+
+                <button class="btn btn-status" id="monoBtn" onclick="toggleMono()" style="min-width: 80px"
+                    title="Toggle Forced Mono / Auto Stereo">AUTO ST</button>
+                <button class="btn" onclick="tuneNext(-1)" style="padding:10px"
+                    title="Tune to previous strong station">&lt; PREV</button>
+                <button class="btn" onclick="tuneNext(1)" style="padding:10px" title="Tune to next strong station">NEXT
+                    &gt;</button>
+                <button class="btn" onclick="tuneStrongest()"
+                    title="Auto-tune to the absolute strongest peak nearby">SNAP BEST</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
+                <span class="d-label" style="margin:0">Spectrum Sweep Control</span>
+                <button class="btn btn-status" id="sqToggle" onclick="toggleSquelch()"
+                    style="padding:2px 8px; font-weight:bold;"
+                    title="Toggle signal threshold for spectrum labels and audio">SQUELCH OFF</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:15px">
+                <button class="btn btn-active" id="bandFM" onclick="switchBand(1)">FM BAND</button>
+                <button class="btn" id="bandMW" onclick="switchBand(2)">MEDIUMWAVE</button>
+                <button class="btn" id="bandSW" onclick="switchBand(3)">SHORTWAVE</button>
+            </div>
+            <button class="btn" id="scanS" onclick="toggleScan('S')" style="height:50px;margin-bottom:10px;width:100%"
+                title="Slow, high-resolution spectrum sweep">ACCURATE ANALYZE</button>
+            <button class="btn" id="scanQ" onclick="toggleScan('Q')"
+                style="height:40px;margin-bottom:10px;width:100%;border-color:var(--warn);color:var(--warn)"
+                title="Ultra-fast spectrum overview">BLITZ SWEEP (FAST)</button>
+            <button class="btn btn-ultra" id="ultraBtn" onclick="toggleUltraRDS()"
+                style="height:45px;margin-bottom:15px;width:100%"
+                title="Maximize RDS sensitivity for weak signals (Mono + Fixed 56k BW + Statistical Decoder)">⚡
+                ULTRA-RDS DX MODE</button>
+            <div style="font-size:9px; color:var(--dim); text-align:right; margin-top:5px; opacity:0.4;">v2.5-DX-PRO
+            </div>
+
+            <div class="filter-section">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+                    <span class="d-label" style="margin:0">Station Identification</span>
+                    <span class="station-count" id="stationCount">No stations loaded</span>
+                </div>
+                <button class="btn" id="geoBtn" onclick="loadStationsByLocation()"
+                    style="width:100%;margin-bottom:8px;background:#002244;border-color:#4488ff;color:#4488ff">📍 USE MY
+                    LOCATION</button>
+                <div style="display:flex;gap:8px;margin-bottom:8px">
+                    <button class="btn" onclick="document.getElementById('csvUpload').click()"
+                        style="flex:1;background:#2a1133;border-color:#b455f6;color:#d88bff">📁 LOAD CSV</button>
+                    <button class="btn" onclick="loadDefaultStations()" id="defaultDbBtn"
+                        style="flex:1;background:#332211;border-color:#ff8844;color:#ff8844">📁 DEFAULT DB</button>
+                    <input type="file" id="csvUpload" accept=".csv" style="display:none"
+                        onchange="handleCSVUpload(event)">
+                </div>
+                <div
+                    style="background:#080808; border:1px solid #333; border-radius:3px; padding:8px; margin-bottom:8px">
+                    <span class="d-label" style="margin-bottom:4px">LIVE FMLIST URDS DATA (CLICK TO SELECT)</span>
+                    <textarea id="urdsLiveBox" readonly
+                        style="width:100%; height:45px; background:transparent; border:none; color:var(--accent); font-family:monospace; font-size:10px; resize:none; outline:none;"
+                        onclick="this.select()"></textarea>
+                </div>
+                <div class="filter-row">
+                    <label>Or manual</label>
+                    <select class="filter-select" id="countrySelect" onchange="loadStationsForCountries([this.value])">
+                        <option value="">Select country...</option>
+                        <option value="US">United States</option>
+                        <option value="GB">United Kingdom</option>
+                        <option value="DE">Germany</option>
+                        <option value="FR">France</option>
+                        <option value="NL">Netherlands</option>
+                        <option value="BE">Belgium</option>
+                        <option value="IT">Italy</option>
+                        <option value="ES">Spain</option>
+                        <option value="PT">Portugal</option>
+                        <option value="AT">Austria</option>
+                        <option value="CH">Switzerland</option>
+                        <option value="PL">Poland</option>
+                        <option value="CZ">Czech Republic</option>
+                        <option value="SE">Sweden</option>
+                        <option value="NO">Norway</option>
+                        <option value="DK">Denmark</option>
+                        <option value="FI">Finland</option>
+                        <option value="RU">Russia</option>
+                        <option value="JP">Japan</option>
+                        <option value="KR">South Korea</option>
+                        <option value="AU">Australia</option>
+                        <option value="NZ">New Zealand</option>
+                        <option value="ZA">South Africa</option>
+                        <option value="BR">Brazil</option>
+                        <option value="AR">Argentina</option>
+                        <option value="MX">Mexico</option>
+                        <option value="CA">Canada</option>
+                        <option value="IN">India</option>
+                        <option value="CN">China</option>
+                        <option value="TR">Turkey</option>
+                        <option value="GR">Greece</option>
+                        <option value="RO">Romania</option>
+                        <option value="HU">Hungary</option>
+                        <option value="IE">Ireland</option>
+                    </select>
+                </div>
+                <div class="filter-row">
+                    <label>Genre</label>
+                    <select class="filter-select" id="genreSelect" onchange="applyGenreFilter()">
+                        <option value="">All Genres</option>
+                    </select>
+                </div>
+                <div class="tag-pills" id="tagPills"></div>
+                <div style="display:flex;gap:8px;margin-top:8px">
+                    <button class="btn btn-status" id="labelsToggle" onclick="toggleLabels()"
+                        style="padding:2px 8px; font-weight:bold; flex:1">LABELS ON</button>
+                    <button class="btn btn-status" onclick="clearStationCache()"
+                        style="padding:2px 8px; font-weight:bold;">CLEAR CACHE</button>
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px">
+                <span class="d-label" style="margin:0">Band Discovery Log</span>
+                <button class="btn btn-status" onclick="exportCSV()" style="padding:2px 8px; font-weight:bold;">EXPORT
+                    CSV</button>
+            </div>
+            <div class="log-area" id="log"></div>
+        </div>
+    </div>
+
+    <div id="advModal" onclick="if(event.target === this) closeAdvanced()"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center; backdrop-filter: blur(4px);">
+        <div
+            style="background:var(--surface); border:1px solid #333; padding:25px; border-radius:8px; width:480px; max-width:95%; display:flex; flex-direction:column; gap:20px; max-height:90vh; overflow-y:auto; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+            <div
+                style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #222; padding-bottom: 10px;">
+                <h3 style="margin:0; color:var(--accent); letter-spacing: 1px;">SYSTEM CONFIGURATION</h3>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button class="btn" onclick="resetAdvanced()"
+                        style="padding:4px 10px; font-size:10px; background:#331111; border-color:#662222; color:#ff8888;">RESET
+                        ALL DEFAULTS</button>
+                    <button onclick="closeAdvanced()" 
+                        style="background:none; border:none; color:var(--dim); font-size:24px; cursor:pointer; line-height:1; padding:0 5px; transition:color 0.2s;"
+                        onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--dim)'">×</button>
+                </div>
+            </div>
+
+            <div id="section_global"
+                style="background: #080808; border:1px solid #222; padding:15px; border-radius:6px;">
+                <h4
+                    style="margin:0 0 12px 0; color:var(--accent); font-size:11px; text-transform:uppercase; letter-spacing: 0.5px;">
+                    Global System Configuration</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <label style="font-size:10px; color:var(--dim);">SDA GPIO</label>
+                        <input type="number" id="set_sda" value="4"
+                            style="background:#000; border:1px solid #333; color:#fff; padding:8px; border-radius:4px; outline:none; font-family:monospace;">
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <label style="font-size:10px; color:var(--dim);">SCL GPIO</label>
+                        <input type="number" id="set_scl" value="5"
+                            style="background:#000; border:1px solid #333; color:#fff; padding:8px; border-radius:4px; outline:none; font-family:monospace;">
+                    </div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <label style="display:flex; align-items:center; gap:10px; font-size:12px; cursor:pointer;">
+                        <input type="checkbox" id="set_autoScan"
+                            style="width:16px; height:16px; accent-color:var(--accent);"> Auto-scan on connection
+                    </label>
+                    <label style="display:flex; align-items:center; gap:10px; font-size:12px; cursor:pointer;">
+                        <input type="checkbox" id="set_autoTune" checked
+                            style="width:16px; height:16px; accent-color:var(--accent);"> Auto-tune to strongest signal
+                        after scan
+                    </label>
+                    <label style="display:flex; align-items:center; gap:10px; font-size:12px; cursor:pointer;">
+                        <input type="checkbox" id="set_smartI2C" checked
+                            style="width:16px; height:16px; accent-color:var(--warn);"> Smart I2C (Auto-off on weak
+                        signals / Mono)
+                    </label>
+                    <label style="display:flex; align-items:center; gap:10px; font-size:12px; cursor:pointer;">
+                        <input type="checkbox" id="set_nb" checked
+                            style="width:16px; height:16px; accent-color:var(--accent);"> Noise Blanker (Global Pulse
+                        Suppression)
+                    </label>
+                </div>
+            </div>
+
+            <div id="section_network"
+                style="background: #080808; border:1px solid #222; padding:15px; border-radius:6px; border-left: 3px solid #4488ff;">
+                <h4
+                    style="margin:0 0 12px 0; color:#4488ff; font-size:11px; text-transform:uppercase; letter-spacing: 0.5px;">
+                    WiFi & Location Settings</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:12px;">
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <label style="font-size:10px; color:var(--dim);">WIFI SSID</label>
+                        <input type="text" id="set_ssid" placeholder="Network Name"
+                            style="background:#000; border:1px solid #333; color:#fff; padding:8px; border-radius:4px; outline:none; font-family:monospace; font-size:12px;">
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <label style="font-size:10px; color:var(--dim);">WIFI PASSWORD</label>
+                        <input type="password" id="set_pass" placeholder="Leave blank to keep current"
+                            style="background:#000; border:1px solid #333; color:#fff; padding:8px; border-radius:4px; outline:none; font-family:monospace; font-size:12px;">
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <label style="font-size:10px; color:var(--dim);">LATITUDE (MANUAL)</label>
+                        <input type="number" id="set_lat" step="0.000001" value="0.000000"
+                            style="background:#000; border:1px solid #333; color:#fff; padding:8px; border-radius:4px; outline:none; font-family:monospace; font-size:12px;">
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <label style="font-size:10px; color:var(--dim);">LONGITUDE (MANUAL)</label>
+                        <input type="number" id="set_lon" step="0.000001" value="0.000000"
+                            style="background:#000; border:1px solid #333; color:#fff; padding:8px; border-radius:4px; outline:none; font-family:monospace; font-size:12px;">
+                    </div>
+                </div>
+                <p style="margin:8px 0 0 0; font-size:9px; color:var(--dim);">Leave coordinates at 0.0 to use browser auto-detection (currently: <span id="autoLocLabel">Searching...</span>).</p>
+            </div>
+
+            <div
+                style="background: #080808; border:1px solid #222; padding:15px; border-radius:6px; border-left: 3px solid var(--accent);">
+                <h4
+                    style="margin:0 0 12px 0; color:var(--accent); font-size:11px; text-transform:uppercase; letter-spacing: 0.5px;">
+                    Web Monitor Audio Source</h4>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <label style="font-size:10px; color:var(--dim);">SELECT RADIO INPUT (SOUND CARD)</label>
+                    <div style="display:flex; gap:8px;">
+                        <select id="set_audioDevice" class="filter-select" style="flex:1;"
+                            onchange="updateAudioDevice(this.value)">
+                            <option value="">Default System Input</option>
+                        </select>
+                        <button class="btn" onclick="refreshAudioDevices()"
+                            style="padding:4px 12px; font-size:10px; background:#222; border-color:#444;">LOAD
+                            DEVICES</button>
+                    </div>
+                    <small style="font-size:9px; color:var(--dim); margin-top:2px;">Click 'LOAD' to grant microphone
+                        permission and list available cards.</small>
+                </div>
+            </div>
+
+            <div id="section_fm"
+                style="background: #080808; border:1px solid #222; padding:15px; border-radius:6px; border-left: 3px solid #00ffaa; transition: opacity 0.3s;">
+                <h4
+                    style="margin:0 0 12px 0; color:#00ffaa; font-size:11px; text-transform:uppercase; letter-spacing: 0.5px;">
+                    FM DX Engine (Module 32)</h4>
+                <div class="filter-row" style="margin-bottom:12px">
+                    <label style="min-width:110px; font-size:10px; color:var(--dim);">Multipath (IMS)</label>
+                    <select class="filter-select" id="set_ims">
+                        <option value="0">Disabled</option>
+                        <option value="1">Enabled (Multipath Mitigation)</option>
+                    </select>
+                </div>
+                <div class="filter-row" style="margin-bottom:12px">
+                    <label style="min-width:110px; font-size:10px; color:var(--dim);">De-emphasis</label>
+                    <select class="filter-select" id="set_deemph">
+                        <option value="500">50 µs (Europe/Asia)</option>
+                        <option value="750">75 µs (Americas)</option>
+                    </select>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px">
+                    <label style="display:flex; align-items:center; gap:10px; font-size:11px; cursor:pointer">
+                        <input type="checkbox" id="set_eq" style="width:14px; height:14px;"> Channel EQ
+                    </label>
+                    <label style="display:flex; align-items:center; gap:10px; font-size:11px; cursor:pointer">
+                        <input type="checkbox" id="set_hc" style="width:14px; height:14px;"> Highcut Filter
+                    </label>
+                </div>
+            </div>
+
+            <div id="section_am"
+                style="background: #080808; border:1px solid #222; padding:15px; border-radius:6px; border-left: 3px solid #ffcc00; transition: opacity 0.3s;">
+                <h4
+                    style="margin:0 0 12px 0; color:#ffcc00; font-size:11px; text-transform:uppercase; letter-spacing: 0.5px;">
+                    AM/Shortwave Engine (Module 33)</h4>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px">
+                    <div class="filter-row" style="margin:0">
+                        <label style="font-size:10px; color:var(--dim);">Antenna Atten.</label>
+                        <select class="filter-select" id="set_am_atten">
+                            <option value="0">0 dB (Max)</option>
+                            <option value="60">6 dB</option>
+                            <option value="120">12 dB</option>
+                            <option value="180">18 dB</option>
+                        </select>
+                    </div>
+                    <div class="filter-row" style="margin:0">
+                        <label style="font-size:10px; color:var(--dim);">Co-Channel Det.</label>
+                        <select class="filter-select" id="set_am_cochan">
+                            <option value="0">Off</option>
+                            <option value="1">On (Sharp)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="filter-row"
+                    style="margin-bottom:12px; flex-direction:column; align-items:flex-start; gap:5px">
+                    <div style="display:flex; justify-content:space-between; width:100%">
+                        <label style="font-size:10px; color:var(--dim);">RF AGC Start Level</label>
+                        <span id="agcVal" style="font-size:10px; color:var(--accent)">90 dBuV</span>
+                    </div>
+                    <input type="range" id="set_am_agc" min="500" max="1000" step="50" value="900"
+                        style="width:100%; height:4px; accent-color:#ffcc00;"
+                        oninput="document.getElementById('agcVal').innerText = (this.value/10) + ' dBuV'">
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px">
+                    <label style="display:flex; align-items:center; gap:8px; font-size:11px; cursor:pointer">
+                        <input type="checkbox" id="set_am_audio_nb" style="width:14px; height:14px;"> Audio NB
+                    </label>
+                    <label style="display:flex; align-items:center; gap:8px; font-size:11px; cursor:pointer">
+                        <input type="checkbox" id="set_am_softmute" style="width:14px; height:14px;"> Softmute
+                    </label>
+                    <label style="display:flex; align-items:center; gap:8px; font-size:11px; cursor:pointer">
+                        <input type="checkbox" id="set_lc" style="width:14px; height:14px;"> Lowcut Filter
+                    </label>
+                </div>
+            </div>
+
+            <div style="background: #080808; border:1px solid #222; padding:15px; border-radius:6px;">
+                <h4 style="margin:0 0 8px 0; color:var(--accent); font-size:11px; text-transform:uppercase;">Startup
+                    Commands</h4>
+                <textarea id="advCmds" placeholder="32,10,2400 (Example: Manual FM BW 240kHz)"
+                    style="width:100%; height:60px; background:#000; border:1px solid #333; color:var(--accent); padding:10px; font-family:monospace; font-size:11px; resize:none; outline:none; border-radius:4px; box-sizing: border-box;"></textarea>
+            </div>
+
+
+            <style>
+                @keyframes spin {
+                    0% {
+                        transform: rotate(0deg);
+                    }
+
+                    100% {
+                        transform: rotate(360deg);
+                    }
+                }
+
+                @keyframes fadeIn {
+                    from {
+                        opacity: 0;
+                        transform: translateY(10px);
+                    }
+
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+            </style>
+
+            <div style="background: #080808; border:1px solid #222; padding:15px; border-radius:6px;">
+                <h4
+                    style="margin:0 0 12px 0; color:var(--accent); font-size:11px; text-transform:uppercase; letter-spacing: 0.5px;">
+                    DSP Audio & Signal Thresholds</h4>
+
+                <div style="margin-bottom:15px;">
+                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;">
+                        <span style="color:#aaa;">Softmute Threshold</span>
+                        <span id="val_softmute" style="color:var(--accent); font-weight:bold;">15 dBµV</span>
+                    </div>
+                    <input type="range" id="set_softmute" min="-10" max="40" value="15"
+                        oninput="document.getElementById('val_softmute').innerText = this.value + ' dBµV'"
+                        style="width:100%; accent-color:var(--accent); cursor:pointer;">
+                    <p style="margin:6px 0 0 0; font-size:9px; color:var(--dim);">Lower values allow hearing more noise.
+                        Higher values mute weak signals.</p>
+                </div>
+
+                <div style="margin-bottom:15px;">
+                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;">
+                        <span style="color:#aaa;">Stereo Blend Threshold</span>
+                        <span id="val_stereo" style="color:var(--accent); font-weight:bold;">30 dBµV</span>
+                    </div>
+                    <input type="range" id="set_stereo" min="10" max="60" value="30"
+                        oninput="document.getElementById('val_stereo').innerText = this.value + ' dBµV'"
+                        style="width:100%; accent-color:var(--accent); cursor:pointer;">
+                    <p style="margin:6px 0 0 0; font-size:9px; color:var(--dim);">Signals below this will gradually
+                        blend to mono for better SN ratio.</p>
+                </div>
+
+                <div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;">
+                        <span style="color:#aaa;">High Cut (Dynamic Treble)</span>
+                        <span id="val_highcut" style="color:var(--accent); font-weight:bold;">25 dBµV</span>
+                    </div>
+                    <input type="range" id="set_highcut" min="10" max="50" value="25"
+                        oninput="document.getElementById('val_highcut').innerText = this.value + ' dBµV'"
+                        style="width:100%; accent-color:var(--accent); cursor:pointer;">
+                    <p style="margin:6px 0 0 0; font-size:9px; color:var(--dim);">Reduces high frequencies on weak/noisy
+                        signals.</p>
+                </div>
+                <div style="margin-top:18px; padding-top:12px; border-top:1px solid #222;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="color:#aaa; font-size:11px;">Auto DX DSP Engine</span>
+                        <label class="switch" style="width:34px; height:20px;">
+                            <input type="checkbox" id="set_autoDX">
+                            <span class="slider" style="border-radius:20px;"></span>
+                        </label>
+                    </div>
+                    <p style="margin:0; font-size:9px; color:var(--dim); line-height:1.3;">Automatically handles Channel
+                        EQ, Noise Blanker, High/Lowcut based on signal (Off if >50% Stereo).</p>
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:10px; padding-top:20px; border-top:1px solid #222;">
+                <button class="btn" onclick="closeAdvanced()" style="background:transparent; border-color:#444;">CANCEL</button>
+                <button class="btn btn-active" onclick="saveAdvanced()" style="padding:10px 30px; box-shadow: 0 4px 15px rgba(0,255,170,0.2);">SAVE SETTINGS</button>
+            </div>
+
+        </div>
+    </div>
+    </div>
+
+    <div id="welcomeModal"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center; backdrop-filter: blur(8px); animation: fadeIn 0.4s ease-out;">
+
+        <div id="welcomeStep1" class="modal-card"
+            style="background:var(--surface); border:1px solid #333; padding:40px; border-radius:12px; width:500px; max-width:90%; text-align:center; box-shadow: 0 20px 50px rgba(0,0,0,0.9);">
+            <div style="font-size:48px; margin-bottom:20px;">🔌</div>
+            <h2
+                style="color:var(--accent); margin:0 0 10px 0; letter-spacing:1px; font-weight:bold; text-transform:uppercase;">
+                Connect to Radio</h2>
+            <p style="color:#e0e0e0; font-size:15px; margin-bottom:35px; line-height:1.6; font-family:sans-serif;">
+                To begin analyzing the airwaves, please establish a connection with your TEF6686 hardware.
+            </p>
+            <div style="display:flex; flex-direction:column; gap:15px; margin-bottom:25px;">
+                <button class="btn btn-active" onclick="connectUSB()" style="height:60px; font-size:14px;">CONNECT VIA
+                    USB SERIAL</button>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="welcomeWifiIp" placeholder="tef6686.local"
+                        style="flex:1; background:#000; border:1px solid #333; border-radius:4px; color:#fff; padding:0 15px; font-family:monospace; font-size:14px; outline:none;">
+                    <button class="btn" onclick="connectWelcomeWiFi()"
+                        style="background:#002244; border-color:#4488ff; color:#4488ff; height:60px; min-width:140px;">WIFI
+                        LINK</button>
+                </div>
+            </div>
+            <p
+                style="font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:1px; font-family:monospace;">
+                Ensure your radio is powered and plugged in.</p>
+        </div>
+
+        <div id="welcomeStep2" class="modal-card"
+            style="display:none; background:var(--surface); border:1px solid var(--accent); padding:40px; border-radius:12px; width:500px; max-width:90%; text-align:center; box-shadow: 0 0 30px rgba(0, 255, 170, 0.2);">
+            <div style="font-size:48px; margin-bottom:20px;">✅</div>
+            <h2
+                style="color:var(--accent); margin:0 0 10px 0; letter-spacing:1px; font-weight:bold; text-transform:uppercase;">
+                System Online</h2>
+            <p style="color:#e0e0e0; font-size:15px; margin-bottom:35px; line-height:1.6; font-family:sans-serif;">
+                Hardware link established. Would you like a quick interactive tour of the analyzer, or jump straight to
+                discovery?
+            </p>
+            <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin-bottom:15px;">
+                <button class="btn btn-active" onclick="startInteractiveTutorial()"
+                    style="height:55px; font-size:13px;">START INTERACTIVE TOUR</button>
+                <button class="btn" onclick="showWelcomeStep(4)"
+                    style="height:55px; font-size:13px; background:#222;">JUMP TO AIRWAVE DISCOVERY</button>
+            </div>
+            <button class="btn" onclick="closeWelcome()"
+                style="width:100%; height:45px; background:transparent; border-color:#333; font-size:11px; color:var(--dim);">SKIP
+                ALL & START MANUAL</button>
+        </div>
+
+        <div id="welcomeStep4" class="modal-card"
+            style="display:none; background:var(--surface); border:1px solid #333; padding:40px; border-radius:12px; width:500px; max-width:90%; text-align:center; box-shadow: 0 20px 50px rgba(0,0,0,0.9);">
+            <div style="font-size:48px; margin-bottom:20px;">🚀</div>
+            <h2
+                style="color:var(--accent); margin:0 0 10px 0; letter-spacing:1px; font-weight:bold; text-transform:uppercase;">
+                Discovery Ready</h2>
+            <p style="color:#e0e0e0; font-size:15px; margin-bottom:35px; line-height:1.6; font-family:sans-serif;">
+                Choose a band to perform your initial automated sweep.
+            </p>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:25px;">
+                <button class="btn btn-active" onclick="startDiscovery(1)" style="height:55px; font-size:12px;">SCAN FM
+                    BAND</button>
+                <button class="btn" onclick="startDiscovery(2)"
+                    style="height:55px; font-size:12px; background:#222;">SCAN MEDIUMWAVE</button>
+                <button class="btn" onclick="startDiscovery(3)"
+                    style="height:55px; font-size:12px; background:#222;">SCAN SHORTWAVE</button>
+                <button class="btn" onclick="closeWelcome()"
+                    style="height:55px; font-size:12px; background:transparent; border-color:#444;">SKIP FOR
+                    NOW</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        let port, isScanning = false, didDrag = false, renderRunning = false;
+        // Spectrum storage for each band
+        const bandScans = {
+            1: new Map(), // FM
+            2: new Map(), // MW
+            3: new Map()  // SW
+        };
+
+        function getScanData() {
+            return bandScans[currentBand] || bandScans[1];
+        }
+        let scanDataSorted = []; // Pre-sorted cache: [[freq, signal], ...]
+        let scanDataDirty = false;
+        let currentBand = 1, smoothRSSI = 0;
+        let manualLat = parseFloat(localStorage.getItem('radio_lat') || '0');
+        let manualLon = parseFloat(localStorage.getItem('radio_lon') || '0');
+        let autoPos = { lat: 0, lon: 0 };
+
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition((pos) => {
+                autoPos.lat = pos.coords.latitude;
+                autoPos.lon = pos.coords.longitude;
+                const label = document.getElementById('autoLocLabel');
+                if (label) label.innerText = `${autoPos.lat.toFixed(4)}, ${autoPos.lon.toFixed(4)}`;
+            }, null, { enableHighAccuracy: false, timeout: 10000 });
+        }
+        let squelchLevel = 38;
+        let isDraggingSquelch = false;
+        let isMuted = false;
+
+        // --- CONNECTION MODE ---
+        let isI2CSleep = false;
+        let connectionMode = 'usb'; // 'usb' or 'wifi'
+        let ws = null; // WebSocket instance for WiFi mode
+
+        function closeWelcome() {
+            document.getElementById('welcomeModal').style.display = 'none';
+            // Reset to Step 1 for the next reload
+            setTimeout(() => showWelcomeStep(1), 500);
+        }
+
+        function showWelcomeStep(step) {
+            // Check if we have any scan data
+            const hasData = [1, 2, 3].some(b => bandScans[b] && bandScans[b].size > 0);
+
+            // If we are at the tutorial choice step, only skip it if the user has finished it AND we have existing data.
+            // This ensures that on every fresh reload (no graphs), the user is asked again.
+            if (step === 2 && localStorage.getItem('tutFinished') && hasData) {
+                showWelcomeStep(4);
+                return;
+            }
+            const s1 = document.getElementById('welcomeStep1');
+            const s2 = document.getElementById('welcomeStep2');
+            const s3 = document.getElementById('welcomeStep3');
+            const s4 = document.getElementById('welcomeStep4');
+            if (s1) s1.style.display = (step === 1) ? 'block' : 'none';
+            if (s2) s2.style.display = (step === 2) ? 'block' : 'none';
+            if (s3) s3.style.display = (step === 3) ? 'block' : 'none';
+            if (s4) s4.style.display = (step === 4) ? 'block' : 'none';
+        }
+
+        let currentTutStep = 0;
+        const tutSteps = [
+            {
+                id: 'fMain',
+                title: 'Frequency Readout',
+                text: 'Once connected, this area shows your active frequency. You can type directly here or use the step buttons below.',
+                actionType: null
+            },
+            {
+                id: 'scanQ',
+                title: 'Initial Sweep',
+                text: 'Let\'s see what\'s on the air! Click <b>BLITZ SWEEP</b> to perform a high-speed discovery of the entire FM band.',
+                actionType: 'click',
+                stateCheck: () => isScanning === true,
+                hideNextBtn: true
+            },
+            {
+                id: 'metricsGrid',
+                title: 'Signal Analytics',
+                text: 'Monitor <b>SNR</b>, <b>RSSI</b>, and <b>Multipath</b> levels here. These metrics update in real-time as you tune.',
+                actionType: null
+            },
+            {
+                id: 'listenBtn',
+                title: 'Web Monitor',
+                text: 'Finally, click <b>LISTEN</b> to route the radio audio through your browser. Happy DXing!',
+                actionType: 'click',
+                stateCheck: () => isListening === true,
+                hideNextBtn: true
+            }
+        ];
+
+        let tutResizeObserver = null;
+        let tutActiveElement = null;
+        let tutCurrentListener = null;
+
+        function handleTutKeydown(e) {
+            if (e.key === 'ArrowRight') nextTutStep();
+            if (e.key === 'ArrowLeft') prevTutStep();
+            if (e.key === 'Escape') nextTutStep(true);
+        }
+
+        function startInteractiveTutorial() {
+            document.getElementById('welcomeModal').style.display = 'none';
+            document.getElementById('tutOverlay').style.display = 'block';
+            document.getElementById('tutTooltip').style.display = 'flex';
+            window.addEventListener('keydown', handleTutKeydown);
+            currentTutStep = 0;
+            updateTutStep();
+        }
+
+        function updateTutStep() {
+            // Cleanup previous step safely
+            if (tutActiveElement) {
+                if (tutCurrentListener) {
+                    tutActiveElement.removeEventListener('click', tutCurrentListener);
+                    tutCurrentListener = null;
+                    delete tutActiveElement.dataset.tutChecking;
+                }
+            }
+
+            // Find next valid step if current one is missing or hidden
+            let step = tutSteps[currentTutStep];
+            let el = document.getElementById(step.id);
+
+            while ((!el || (el.offsetWidth === 0 && el.offsetHeight === 0)) && currentTutStep < tutSteps.length - 1) {
+                console.warn(`[Tutorial] Skipping ${step.id} - not found or hidden.`);
+                currentTutStep++;
+                step = tutSteps[currentTutStep];
+                el = document.getElementById(step.id);
+            }
+
+            const tooltip = document.getElementById('tutTooltip');
+            const nextBtn = document.getElementById('tutNextBtn');
+            const prevBtn = document.getElementById('tutPrevBtn');
+            const dots = document.getElementById('tutDots');
+
+            if (!el) { nextTutStep(true); return; }
+
+            tutActiveElement = el;
+
+            // Attach robust polling action listener if required
+            if (step.actionType === 'click') {
+                tutCurrentListener = () => {
+                    // Prevent multiple intervals if user double clicks
+                    if (el.dataset.tutChecking) return;
+                    el.dataset.tutChecking = 'true';
+
+                    let attempts = 0;
+                    const check = setInterval(() => {
+                        attempts++;
+                        if (!step.stateCheck || step.stateCheck()) {
+                            clearInterval(check);
+                            delete el.dataset.tutChecking;
+                            nextTutStep();
+                        } else if (attempts > 150) { // Timeout after ~30s waiting for states like mic permission
+                            clearInterval(check);
+                            delete el.dataset.tutChecking;
+                        }
+                    }, 200);
+                };
+                el.addEventListener('click', tutCurrentListener);
+            }
+
+            // Clean up old observer and track size changes on the new target
+            if (tutResizeObserver) tutResizeObserver.disconnect();
+            tutResizeObserver = new ResizeObserver(() => updatePosition(el, step));
+            tutResizeObserver.observe(el);
+
+            // HARDENING: If pointing at RDS panel, ensure it is visible!
+            if (step.id === 'rdsPanel' && el.style.display === 'none') {
+                el.style.display = 'block';
+            }
+
+            function updatePosition(targetEl, currentStep) {
+                const rect = targetEl.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) return;
+
+                const pad = 15;
+                const tooltip = document.getElementById('tutTooltip');
+                const overlay = document.getElementById('tutOverlay');
+
+                // Create physical click-through hole in blurred overlay using clip-path
+                const x1 = rect.left - pad;
+                const y1 = rect.top - pad;
+                const x2 = x1 + rect.width + pad * 2;
+                const y2 = y1 + rect.height + pad * 2;
+                overlay.style.clipPath = `polygon(0% 0%, 0% 100%, ${x1}px 100%, ${x1}px ${y1}px, ${x2}px ${y1}px, ${x2}px ${y2}px, ${x1}px ${y2}px, ${x1}px 100%, 100% 100%, 100% 0%)`;
+
+                // Action-driven visibility logic
+                if (currentStep.hideNextBtn) {
+                    nextBtn.style.display = 'none';
+                } else {
+                    nextBtn.style.display = 'block';
+                }
+
+                document.getElementById('tutTitle').innerText = currentStep.title;
+                document.getElementById('tutText').innerHTML = currentStep.text;
+                document.getElementById('tutStepLabel').innerText = `${currentTutStep + 1} / ${tutSteps.length}`;
+
+                // Update Dots
+                dots.innerHTML = '';
+                tutSteps.forEach((_, i) => {
+                    const dot = document.createElement('div');
+                    dot.className = `tut-dot ${i === currentTutStep ? 'active' : ''}`;
+                    dots.appendChild(dot);
+                });
+
+                if (prevBtn) prevBtn.style.display = (currentTutStep === 0) ? 'none' : 'block';
+                if (nextBtn) nextBtn.innerText = (currentTutStep === tutSteps.length - 1) ? 'FINISH & SCAN' : 'NEXT';
+
+                tooltip.style.opacity = '1';
+
+                const tooltipWidth = 320;
+                const tooltipHeight = tooltip.offsetHeight || 200;
+                const targetCenterX = rect.left + rect.width / 2;
+
+                // 1. Horizontal Positioning (Clamped)
+                let leftPos = targetCenterX - (tooltipWidth / 2);
+                leftPos = Math.max(20, Math.min(window.innerWidth - tooltipWidth - 20, leftPos));
+                tooltip.style.left = leftPos + 'px';
+
+                // 2. Vertical Positioning (Smart-Flip)
+                let topPos = rect.top + rect.height + 40; // Default: Below element
+                let arrowPos = 'top';
+
+                // Small Screen / Mobile Fallback
+                if (window.innerHeight < 600) {
+                    topPos = window.innerHeight - tooltipHeight - 20;
+                    leftPos = (window.innerWidth - tooltipWidth) / 2;
+                    tooltip.style.left = leftPos + 'px';
+                    document.getElementById('tutArrow').style.display = 'none';
+                } else {
+                    document.getElementById('tutArrow').style.display = 'block';
+                    // If it goes off the bottom, try placing it above the element
+                    if (topPos + tooltipHeight > window.innerHeight) {
+                        topPos = rect.top - tooltipHeight - 30;
+                        arrowPos = 'bottom';
+                    }
+
+                    // If it's now off the TOP, center it vertically on screen
+                    if (topPos < 10) {
+                        topPos = (window.innerHeight - tooltipHeight) / 2;
+                        arrowPos = 'none';
+                    }
+
+                    // Arrow placement
+                    const arrow = document.getElementById('tutArrow');
+                    if (arrowPos === 'top') {
+                        arrow.style.top = '-7px';
+                        arrow.style.bottom = 'auto';
+                        arrow.style.left = (targetCenterX - leftPos - 6) + 'px';
+                        arrow.style.borderWidth = '1px 0 0 1px';
+                    } else if (arrowPos === 'bottom') {
+                        arrow.style.top = 'auto';
+                        arrow.style.bottom = '-7px';
+                        arrow.style.left = (targetCenterX - leftPos - 6) + 'px';
+                        arrow.style.borderWidth = '0 1px 1px 0';
+                    } else {
+                        arrow.style.display = 'none';
+                    }
+                }
+
+                tooltip.style.top = topPos + 'px';
+            }
+
+            updatePosition(el, step);
+        }
+
+        function prevTutStep() {
+            if (currentTutStep > 0) {
+                currentTutStep--;
+                updateTutStep();
+            }
+        }
+
+        function nextTutStep(close = false) {
+            if (close) {
+                finishTutorial();
+                return;
+            }
+            currentTutStep++;
+            if (currentTutStep >= tutSteps.length) {
+                finishTutorial();
+                showWelcomeStep(4); // Go back to discovery choice
+            } else {
+                updateTutStep();
+            }
+        }
+
+        function finishTutorial() {
+            if (tutActiveElement) {
+                if (tutCurrentListener) {
+                    tutActiveElement.removeEventListener('click', tutCurrentListener);
+                    tutCurrentListener = null;
+                    delete tutActiveElement.dataset.tutChecking;
+                }
+                tutActiveElement = null;
+            }
+            document.getElementById('tutOverlay').style.display = 'none';
+            document.getElementById('tutTooltip').style.display = 'none';
+            window.removeEventListener('keydown', handleTutKeydown);
+            if (tutResizeObserver) tutResizeObserver.disconnect();
+            localStorage.setItem('tutFinished', 'true');
+        }
+
+        function connectWelcomeWiFi() {
+            const ip = document.getElementById('welcomeWifiIp').value.trim();
+            if (ip) document.getElementById('wifiIpInput').value = ip;
+            connectWiFi();
+        }
+
+        function startDiscovery(band) {
+            closeWelcome();
+
+            // HARDENING: Clear existing spectrum data for this band before starting fresh sweep
+            const scanData = bandScans[band] || new Map();
+            scanData.clear();
+            scanDataDirty = true;
+            scanDataSorted = [];
+
+            switchBand(band);
+            // Small delay to let the UI settle before starting the Blitz Scan
+            setTimeout(() => toggleScan('Q'), 500);
+        }
+
+        // Discovery Modal Trigger - Always show on reload to allow connection
+        document.addEventListener('DOMContentLoaded', () => {
+            showWelcomeStep(1); // Ensure we start at Step 1
+            setTimeout(() => {
+                const modal = document.getElementById('welcomeModal');
+                if (modal) modal.style.display = 'flex';
+                else console.error('[UI] Welcome Modal element not found!');
+            }, 1200);
+        });
+
+        // Auto-detect if served via WiFi
+        window.addEventListener('load', () => {
+            if (window.location.protocol.startsWith('http')) {
+                // If served over HTTP, we are likely on the ESP32 itself
+                document.getElementById('wifiIpInput').value = window.location.hostname;
+                if (connectionMode !== 'wifi') {
+                    toggleConnectionMode();
+                }
+                console.log('[Init] Auto-switched to WiFi mode for host:', window.location.hostname);
+            }
+        });
+
+        // --- STATION IDENTIFICATION ---
+        let allStations = [];        // Raw from API
+        let fmStationMap = new Map(); // freq (internal units) -> {name, tags, country, state}
+        let filteredStationMap = new Map(); // After genre filter
+        let showLabels = true;
+        let activeGenreFilter = '';
+        let activeTagFilters = new Set();
+
+        // RDS DECODER - SMART QUEUE EDITION
+        class RDSDecoder {
+            constructor() { this.reset(); }
+            reset() {
+                this.pi = 0;
+                this.ps = new Array(8).fill(' ');
+                this.psHits = new Array(8).fill(0);
+                this.psLast = new Array(8).fill(' ');
+
+                this.rtA = new Array(64).fill(' ');
+                this.rtB = new Array(64).fill(' ');
+                this.rtHitsA = new Array(64).fill(0);
+                this.rtHitsB = new Array(64).fill(0);
+                this.rtLastA = new Array(64).fill(' ');
+                this.rtLastB = new Array(64).fill(' ');
+
+                this.abFlag = -1;
+                this.pty = 0;
+                this.tp = false;
+                this.ta = false;
+                this.ct = "--:--";
+                this.afList = new Set();
+                // Ultra RDS Statistical Tracking
+                this.isUltraMode = false;
+                this.rtStatsA = Array.from({ length: 64 }, () => ({}));
+                this.rtStatsB = Array.from({ length: 64 }, () => ({}));
+                this.rtVotesTotalA = new Array(64).fill(0);
+                this.rtVotesTotalB = new Array(64).fill(0);
+
+                this.displayingRT = null;
+                this.pendingRT = null;
+                this.lastUpdate = 0;
+                this.lastAbFlag = -1;
+            }
+
+            process(blocks) {
+                if (!blocks || blocks.length < 5) return;
+                const [A, B, C, D, err] = blocks;
+                this.hasData = true;
+
+                const errA = (err >> 14) & 0x03;
+                const errB = (err >> 12) & 0x03;
+                const errC = (err >> 10) & 0x03;
+                const errD = (err >> 8) & 0x03;
+
+                if (errA < 2 && A > 0) this.pi = A;
+                if (errB >= 2) return;
+
+                const groupType = (B >> 11) & 0x1F;
+                this.tp = !!((B >> 10) & 0x01);
+                this.pty = (B >> 5) & 0x1F;
+
+                if (groupType === 0 || groupType === 1) {
+                    this.ta = !!((B >> 4) & 0x01);
+                    const pos = (B & 0x03) * 2;
+                    if (errD < 2) {
+                        this.updatePS(pos, (D >> 8) & 0xFF);
+                        this.updatePS(pos + 1, D & 0xFF);
+                    }
+                    if (groupType === 0 && errC < 2 && C) {
+                        const af1 = (C >> 8) & 0xFF, af2 = C & 0xFF;
+                        if (af1 >= 1 && af1 <= 204) this.afList.add(87.5 + af1 * 0.1);
+                        if (af2 >= 1 && af2 <= 204) this.afList.add(87.5 + af2 * 0.1);
+                    }
+                }
+
+                if (groupType === 4 || groupType === 5) {
+                    const newFlag = (B >> 4) & 0x01;
+                    if (this.lastAbFlag !== -1 && this.lastAbFlag !== newFlag) {
+                        // A/B Flag toggled - Clear both statistical models to prevent message pollution
+                        this.rtStatsA = Array.from({ length: 64 }, () => ({}));
+                        this.rtStatsB = Array.from({ length: 64 }, () => ({}));
+                        this.rtVotesTotalA.fill(0);
+                        this.rtVotesTotalB.fill(0);
+                    }
+                    this.lastAbFlag = newFlag;
+                    this.abFlag = newFlag;
+
+                    const pos = (B & 0x0F) * (groupType === 4 ? 4 : 2);
+                    const isA = (this.abFlag === 0);
+
+                    if (groupType === 4) {
+                        if (errC < 2) {
+                            this.updateRT(pos, (C >> 8) & 0xFF, isA);
+                            this.updateRT(pos + 1, C & 0xFF, isA);
+                        }
+                        if (errD < 2) {
+                            this.updateRT(pos + 2, (D >> 8) & 0xFF, isA);
+                            this.updateRT(pos + 3, D & 0xFF, isA);
+                        }
+                    } else {
+                        if (errD < 2) {
+                            this.updateRT(pos, (D >> 8) & 0xFF, isA);
+                            this.updateRT(pos + 1, D & 0xFF, isA);
+                        }
+                    }
+                }
+
+                if (groupType === 8 && errC < 2 && errD < 2) {
+                    const utcHours = ((C & 0x01) << 4) | ((D >> 12) & 0x0F);
+                    const utcMins = (D >> 6) & 0x3F;
+                    const offsetSign = (D & 0x20) ? -1 : 1;
+                    const offsetHalfHours = D & 0x1F;
+                    let m = utcMins + (offsetSign * offsetHalfHours * 30), h = utcHours;
+                    while (m >= 60) { m -= 60; h++; } while (m < 0) { m += 60; h--; }
+                    while (h >= 24) h -= 24; while (h < 0) h += 24;
+                    if (h < 24 && m < 60) this.ct = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                }
+            }
+
+            rdsChar(code) {
+                if (code < 32 || code > 255) return ' ';
+                // Common EBU/ISO RDS Mappings
+                const rdsMap = {
+                    0xF2: 'æ', 0xD2: 'Æ', 0xF8: 'ø', 0xD8: 'Ø', 0xE5: 'å', 0xC5: 'Å',
+                    0xE4: 'ä', 0xF6: 'ö', 0xFC: 'ü', 0xDF: 'ß',
+                    0xC4: 'Ä', 0xD6: 'Ö', 0xDC: 'Ü',
+                    0xE9: 'é', 0xE8: 'è', 0xE0: 'à', 0xE7: 'ç',
+                    0xC9: 'É', 0xC8: 'È', 0xC0: 'À', 0xC7: 'Ç'
+                };
+                return rdsMap[code] || String.fromCharCode(code);
+            }
+
+            updatePS(idx, code) {
+                const char = this.rdsChar(code);
+                if (this.psLast[idx] === char) {
+                    this.psHits[idx]++;
+                    if (this.psHits[idx] >= 3) this.ps[idx] = char; // 3 hits for absolute certainty
+                } else {
+                    this.psHits[idx] = 0;
+                    this.psLast[idx] = char;
+                }
+            }
+
+            updateRT(idx, code, isA) {
+                if (idx >= 64 || code === 0x0D || code === 0x0A) return;
+                const char = this.rdsChar(code);
+                const rt = isA ? this.rtA : this.rtB;
+                const hits = isA ? this.rtHitsA : this.rtHitsB;
+                const last = isA ? this.rtLastA : this.rtLastB;
+
+                if (last[idx] === char) {
+                    hits[idx]++;
+                    if (hits[idx] >= 3) rt[idx] = char;
+                } else {
+                    hits[idx] = 0;
+                    last[idx] = char;
+                }
+
+                // Statistical Voting (Always active in background, used for display in Ultra Mode)
+                const stats = isA ? this.rtStatsA[idx] : this.rtStatsB[idx];
+                const totals = isA ? this.rtVotesTotalA : this.rtVotesTotalB;
+                if (code >= 32) {
+                    stats[char] = (stats[char] || 0) + 1;
+                    totals[idx]++;
+                }
+            }
+
+            getRTStatistical(isA) {
+                const statsArr = isA ? this.rtStatsA : this.rtStatsB;
+                const totals = isA ? this.rtVotesTotalA : this.rtVotesTotalB;
+                let result = [];
+                let hasRealContent = false;
+
+                for (let i = 0; i < 64; i++) {
+                    const stats = statsArr[i];
+                    // ANTI-GHOSTING: Require at least 2 votes before showing a character in Ultra Mode
+                    if (totals[i] < 2) {
+                        result.push({ c: ' ', conf: 0 });
+                        continue;
+                    }
+                    // Find winner for this position
+                    let winner = ' ';
+                    let maxVotes = 0;
+                    for (const char in stats) {
+                        if (stats[char] > maxVotes) {
+                            maxVotes = stats[char];
+                            winner = char;
+                        }
+                    }
+                    const confidence = (maxVotes / totals[i]);
+                    result.push({ c: winner, conf: confidence });
+                    if (winner !== ' ') hasRealContent = true;
+                }
+                return hasRealContent ? result : null;
+            }
+
+            getPS() { const s = this.ps.join('').trim(); return s.length > 0 ? s : null; }
+            getRT(bufferFlag = -1) {
+                const flag = bufferFlag === -1 ? this.abFlag : bufferFlag;
+                const buf = (flag === 1) ? this.rtB : this.rtA;
+                const s = buf.join('').trim();
+                return s.length > 0 ? s : "Waiting for Radio Text...";
+            }
+            getPTY() {
+                const p = ["None", "News", "Current Affairs", "Info", "Sport", "Education", "Drama", "Culture", "Science", "Varied", "Pop", "Rock", "Easy Listening", "Light Classical", "Classical", "Other Music", "Weather", "Finance", "Children's", "Social", "Religion", "Phone In", "Travel", "Leisure", "Jazz", "Country", "National", "Oldies", "Folk", "Documentary", "Alarm Test", "Alarm"];
+                return p[this.pty] || "Unknown";
+            }
+        }
+        const rds = new RDSDecoder();
+
+        function updateRDSUI() {
+            const panel = document.getElementById('rdsPanel');
+            const rtHeader = document.getElementById('rdsRTHeader');
+            const rtPanel = document.getElementById('rdsRTPanel');
+
+            if (currentBand === 1) {
+
+                panel.style.display = 'block';
+
+                // 1. Feedback for I2C Sleep
+                if (isI2CSleep) {
+                    rtPanel.innerHTML = '<span style="color:var(--dim); font-style:italic;">I2C BUS ASLEEP (RDS DISABLED)</span>';
+                    rtHeader.innerText = "I2C SLEEP ACTIVE";
+                    document.getElementById('rdsPI').innerText = "----";
+                    document.getElementById('rdsPTY').innerText = "NONE";
+                    return;
+                }
+
+                // 2. Feedback for No Data
+                if (!rds.hasData) {
+                    rtPanel.innerHTML = '<span style="color:var(--dim);">NO RDS CARRIER DETECTED</span>';
+                    rtHeader.innerText = "... WAITING FOR RDS ...";
+                    document.getElementById('rdsPI').innerText = "----";
+                    document.getElementById('rdsPTY').innerText = "NONE";
+                    return;
+                }
+
+                document.getElementById('rdsPI').innerText = rds.pi > 0 ? rds.pi.toString(16).toUpperCase().padStart(4, '0') : "----";
+                document.getElementById('rdsPTY').innerText = rds.getPTY();
+                document.getElementById('rdsCT').innerText = rds.ct;
+                document.getElementById('rdsAF').innerText = rds.afList.size;
+
+                const activeRT_Raw = rds.getRT();
+
+                // ULTRA MODE VISUALIZATION
+                if (rds.isUltraMode) {
+                    const stats = rds.getRTStatistical(rds.abFlag === 0);
+                    if (stats) {
+                        let html = '';
+                        stats.forEach(item => {
+                            let cls = 'rds-char-weak';
+                            if (item.conf > 0.4) cls = 'rds-char-med';
+                            if (item.conf > 0.7) cls = 'rds-char-strong';
+                            html += `<span class="${cls}">${item.c === ' ' ? '&nbsp;' : item.c}</span>`;
+                        });
+                        rtPanel.innerHTML = html;
+                        const plainText = stats.map(s => s.c).join('').trim();
+                        updateScrollerLogic(plainText || "ULTRA-RDS DECODING...");
+                    } else {
+                        rtPanel.innerText = "ULTRA-RDS: ANALYZING...";
+                        updateScrollerLogic("ULTRA-RDS: ANALYZING...");
+                    }
+                } else {
+                    rtPanel.innerText = activeRT_Raw;
+                    updateScrollerLogic(activeRT_Raw);
+                }
+
+                function updateScrollerLogic(activeRT) {
+                    if (rds.displayingRT === null) {
+                        rds.displayingRT = activeRT;
+                        rds.displayingRT_Flag = rds.abFlag;
+                        rtHeader.innerText = activeRT;
+                    } else if (activeRT !== rds.displayingRT) {
+                        const isPlaceholder = rds.displayingRT.includes("Waiting") || rds.displayingRT.includes("ANALYZING");
+                        if (rds.abFlag === rds.displayingRT_Flag || isPlaceholder) {
+                            rtHeader.innerText = activeRT;
+                            rds.displayingRT = activeRT;
+                            if (isPlaceholder && !activeRT.includes("Waiting")) {
+                                rds.displayingRT_Flag = rds.abFlag;
+                                rtHeader.classList.remove('animate-scroll');
+                                void rtHeader.offsetWidth;
+                                rtHeader.classList.add('animate-scroll');
+                            }
+                        } else {
+                            rds.pendingRT = activeRT;
+                            rds.pendingRT_Flag = rds.abFlag;
+                        }
+                    }
+                }
+
+                const tpBadge = document.getElementById('rdsTP');
+                tpBadge.style.color = rds.tp ? "var(--warn)" : "#555";
+                tpBadge.style.background = rds.tp ? "rgba(255, 170, 0, 0.1)" : "#222";
+
+                const taBadge = document.getElementById('rdsTA');
+                taBadge.style.color = rds.ta ? "#ff4466" : "#555";
+                taBadge.style.background = rds.ta ? "rgba(255, 68, 102, 0.1)" : "#222";
+            } else {
+                panel.style.display = 'none';
+            }
+
+            const psStr = rds.getPS();
+            document.getElementById('psMain').innerText = psStr ? psStr : (currentBand === 1 ? "---" : "AM MODE");
+        }
+
+        // Sequential Message Delivery Engine
+        document.getElementById('rdsRTHeader').addEventListener('animationiteration', () => {
+            if (rds.pendingRT) {
+                const rtHeader = document.getElementById('rdsRTHeader');
+                rtHeader.innerText = rds.pendingRT;
+                rds.displayingRT = rds.pendingRT;
+                rds.displayingRT_Flag = rds.pendingRT_Flag;
+                rds.pendingRT = null;
+            }
+        });
+
+        function toggleUltraRDS() {
+            rds.isUltraMode = !rds.isUltraMode;
+            const btn = document.getElementById('ultraBtn');
+            const badge = document.getElementById('badgeUltra');
+
+            if (rds.isUltraMode) {
+                btn.classList.add('active');
+                badge.style.display = 'block';
+
+                // Ensure I2C is awake for RDS DX
+                if (isI2CSleep) {
+                    send('Z0');
+                    isI2CSleep = false;
+                }
+
+                // HARDWARE OPTIMIZATION FOR RDS DX:
+                send('W32,66,1,2,1000');    // Force Mono (Cmd 66, Mode 2, Limit 1000)
+                send('W32,10,1,0,560,1000,1000'); // Fixed 56kHz BW (Cmd 10, Mode 0 + Sensitivities)
+                send('W32,20,1,1');       // Force IMS On (Cmd 20, Mode 1)
+                console.log("[UltraRDS] DX Mode Active: Mono + 56k BW + IMS + Statistical Voting");
+            } else {
+                btn.classList.remove('active');
+                badge.style.display = 'none';
+                send('W32,66,1,0,1000');    // Restore Stereo Auto (Mode 0, Limit 1000)
+                send('W32,10,1,1,2360,1000,1000'); // Restore Auto BW (Cmd 10, Mode 1)
+                send('W32,20,1,0');       // Restore IMS Auto (Mode 0)
+            }
+            updateRDSUI();
+        }
+
+        // Viewport
+        let viewCenter = 9800;
+        let viewSpan = 2200;
+        let isDragging = false, lastMouseX = 0;
+
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const dpr = window.devicePixelRatio || 1;
+
+        function resize() {
+            canvas.width = canvas.offsetWidth * dpr;
+            canvas.height = canvas.offsetHeight * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Polyfill for CanvasRenderingContext2D.roundRect (older browsers)
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, radii) {
+                const r = typeof radii === 'number' ? radii : (Array.isArray(radii) ? radii[0] : 0);
+                this.moveTo(x + r, y);
+                this.arcTo(x + w, y, x + w, y + h, r);
+                this.arcTo(x + w, y + h, x, y + h, r);
+                this.arcTo(x, y + h, x, y, r);
+                this.arcTo(x, y, x + w, y, r);
+                this.closePath();
+                return this;
+            };
+        }
+
+        // SERIAL — Supports both ESP32-S2 Mini (USB-UART bridge) and ESP32-C3 SuperMini (native USB CDC)
+        const KNOWN_SERIAL_FILTERS = [
+            { usbVendorId: 0x303A },  // Espressif native USB (ESP32-S2/S3/C3/C6)
+            { usbVendorId: 0x10C4 },  // CP210x (common on ESP32 dev boards)
+            { usbVendorId: 0x1A86 },  // CH340 / CH9102 (common on budget boards)
+            { usbVendorId: 0x0403 },  // FTDI
+        ];
+
+        let detectedBoard = 'unknown'; // 'c3', 's2', or 'unknown'
+
+        function detectBoard(portInfo) {
+            const info = portInfo.getInfo ? portInfo.getInfo() : {};
+            const vid = info.usbVendorId;
+            const pid = info.usbProductId;
+            console.log(`[Serial] USB VID=0x${vid?.toString(16) || '?'} PID=0x${pid?.toString(16) || '?'}`);
+
+            if (vid === 0x303A) {
+                return 'c3';
+            }
+            if (vid === 0x10C4 || vid === 0x1A86 || vid === 0x0403) {
+                return 's2';
+            }
+            return 'unknown';
+        }
+
+        // --- CONNECTION MODE TOGGLE ---
+        function toggleConnectionMode() {
+            // Don't switch while connected
+            if (port || ws) {
+                alert('Disconnect first before switching modes.');
+                return;
+            }
+            connectionMode = connectionMode === 'usb' ? 'wifi' : 'usb';
+            const modeBtn = document.getElementById('modeBtn');
+            const ipInput = document.getElementById('wifiIpInput');
+            const connBtn = document.getElementById('connBtn');
+            if (connectionMode === 'wifi') {
+                modeBtn.innerText = '📶 WiFi';
+                modeBtn.style.borderColor = '#4488ff';
+                modeBtn.style.color = '#4488ff';
+                ipInput.style.display = 'block';
+                connBtn.innerText = 'CONNECT WiFi';
+                connBtn.style.background = '#002244';
+                connBtn.style.borderColor = '#4488ff';
+                connBtn.style.color = '#4488ff';
+            } else {
+                modeBtn.innerText = '⚡ USB';
+                modeBtn.style.borderColor = '#555';
+                modeBtn.style.color = '#fff';
+                ipInput.style.display = 'none';
+                connBtn.innerText = 'CONNECT';
+                connBtn.style.background = '#004422';
+                connBtn.style.borderColor = 'var(--accent)';
+                connBtn.style.color = '#fff';
+            }
+        }
+
+        async function connect() {
+            // DISCONNECT LOGIC
+            if (port || ws) {
+                if (port) {
+                    try { await port.close(); } catch (e) { }
+                    port = null;
+                }
+                if (ws) {
+                    ws.close();
+                    ws = null;
+                }
+                setDisconnectedUI();
+                document.getElementById('sysStatus').innerText = "DISCONNECTED";
+                return;
+            }
+
+            // CONNECT LOGIC
+            if (connectionMode === 'wifi') {
+                connectWiFi();
+                return;
+            }
+            await connectUSB();
+        }
+
+        // --- USB SERIAL CONNECTION ---
+        async function connectUSB() {
+            try {
+                port = await navigator.serial.requestPort({ filters: KNOWN_SERIAL_FILTERS });
+                detectedBoard = detectBoard(port);
+
+                await port.open({ baudRate: 115200 });
+
+                try {
+                    await port.setSignals({ dataTerminalReady: true, requestToSend: false });
+                } catch (sigErr) {
+                    console.warn('[Serial] setSignals not supported:', sigErr.message);
+                }
+
+                const boardLabel = detectedBoard === 'c3' ? 'C3 CDC' : (detectedBoard === 's2' ? 'S2 UART' : 'SERIAL');
+                setConnectedUI(`USB (${boardLabel})`);
+                readLoop();
+                if (!renderRunning) { renderRunning = true; requestAnimationFrame(render); }
+                autoStartSweep(detectedBoard === 'c3' ? 1200 : 2000);
+            } catch (e) {
+                if (e.name === 'NotFoundError') return;
+                console.error('Serial connection failed:', e);
+                setErrorUI(e);
+                port = null;
+            }
+        }
+
+        // --- WiFi WebSocket CONNECTION ---
+        function connectWiFi() {
+            if (ws) { ws.close(); ws = null; }
+
+            const host = document.getElementById('wifiIpInput').value.trim() || 'tef6686.local';
+            const url = `ws://${host}:81/`;
+            const connBtn = document.getElementById('connBtn');
+            connBtn.innerText = 'CONNECTING...';
+            connBtn.style.color = 'var(--warn)';
+            document.getElementById('sysStatus').innerText = 'CONNECTING WiFi...';
+            document.getElementById('sysStatus').style.color = 'var(--warn)';
+
+            ws = new WebSocket(url);
+            let connectTimeout = setTimeout(() => {
+                if (ws && ws.readyState !== WebSocket.OPEN) {
+                    ws.close();
+                    ws = null;
+                    connBtn.innerText = 'TIMEOUT';
+                    connBtn.style.color = '#ff4466';
+                    connBtn.style.borderColor = '#ff4466';
+                    document.getElementById('sysStatus').innerText = `TIMEOUT: Could not reach ${host}`;
+                    document.getElementById('sysStatus').style.color = '#ff4466';
+                }
+            }, 6000);
+
+            ws.onopen = () => {
+                clearTimeout(connectTimeout);
+                console.log('[WiFi] WebSocket connected to', url);
+                setConnectedUI('WiFi');
+                if (!renderRunning) { renderRunning = true; requestAnimationFrame(render); }
+                autoStartSweep(1500);
+            };
+
+            ws.onmessage = (event) => {
+                const lines = event.data.split('\n');
+                for (const line of lines) {
+                    if (line.trim()) {
+                        try { processIncoming(line.trim()); } catch (e) { }
+                    }
+                }
+            };
+
+            ws.onclose = () => {
+                clearTimeout(connectTimeout);
+                console.log('[WiFi] WebSocket disconnected');
+                ws = null;
+                setDisconnectedUI();
+            };
+
+            ws.onerror = (err) => {
+                clearTimeout(connectTimeout);
+                console.error('[WiFi] WebSocket error:', err);
+                ws = null;
+                connBtn.innerText = 'WiFi ERROR';
+                connBtn.style.color = '#ff4466';
+                connBtn.style.borderColor = '#ff4466';
+                document.getElementById('sysStatus').innerText = `FAILED: Check IP (${host}) and WiFi`;
+                document.getElementById('sysStatus').style.color = '#ff4466';
+            };
+        }
+
+        function setConnectedUI(label) {
+            const connBtn = document.getElementById('connBtn');
+            connBtn.innerText = `ONLINE (${label})`;
+            connBtn.classList.add('btn-active');
+            connBtn.style.borderColor = 'var(--accent)';
+            connBtn.style.color = 'var(--accent)';
+            document.getElementById('sysStatus').innerText = 'CONNECTED';
+            document.getElementById('sysStatus').style.color = 'var(--accent)';
+
+            const welcomeModal = document.getElementById('welcomeModal');
+            if (welcomeModal && welcomeModal.style.display === 'flex') {
+                showWelcomeStep(2);
+            }
+
+            setTimeout(() => {
+                send('W32,66,1,0,1000'); // Force Stereo Auto
+                send('W32,10,1,1,2360,1000,1000'); // Force Auto BW
+                console.log('[System] Safety Reset: Hardware Mono/BW constraints cleared.');
+            }, 800);
+        }
+
+        function setDisconnectedUI() {
+            const connBtn = document.getElementById('connBtn');
+            connBtn.innerText = 'DISCONNECTED';
+            connBtn.classList.remove('btn-active');
+            connBtn.style.borderColor = '#ff4466';
+            connBtn.style.color = '#ff4466';
+            document.getElementById('sysStatus').innerText = 'OFFLINE';
+            document.getElementById('sysStatus').style.color = '#ff4466';
+            isScanning = false;
+        }
+
+        function setErrorUI(e) {
+            let errorMsg = 'CONNECTION FAILED';
+            if (e.name === 'NetworkError') errorMsg = 'PORT BUSY';
+            else if (e.name === 'SecurityError') errorMsg = 'SECURITY BLOCKED';
+            else if (e.message && e.message.toLowerCase().includes('access denied')) errorMsg = 'ACCESS DENIED';
+            const connBtn = document.getElementById('connBtn');
+            connBtn.innerText = errorMsg;
+            connBtn.title = 'Click to retry. Error: ' + (e.message || e);
+            connBtn.style.color = '#ff4466';
+            connBtn.style.borderColor = '#ff4466';
+            connBtn.classList.remove('btn-active');
+            const status = document.getElementById('sysStatus');
+            status.innerText = 'ERROR: ' + (e.message || String(e)).toUpperCase();
+            status.style.color = '#ff4466';
+        }
+
+        function autoStartSweep(delayMs) {
+            setTimeout(() => {
+                window._targetVol = -2;
+                setTimeout(() => {
+                    if (currentBand !== 1) switchBand(1);
+                }, 300);
+            }, delayMs);
+        }
+
+        document.getElementById('connBtn').addEventListener('click', connect);
+
+        async function readLoop() {
+            const reader = port.readable.getReader();
+            const decoder = new TextDecoder("utf-8", { fatal: false });
+            let buffer = '';
+            try {
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    if (buffer.length > 8192) {
+                        const lastNewline = buffer.lastIndexOf('\n');
+                        if (lastNewline > 0) {
+                            buffer = buffer.slice(lastNewline + 1);
+                        } else {
+                            buffer = '';
+                        }
+                        continue;
+                    }
+
+                    let lines = buffer.split('\n');
+                    buffer = lines.pop();
+                    for (let line of lines) {
+                        try { processIncoming(line); } catch (e) { }
+                    }
+                }
+            } catch (e) {
+                console.error('Serial read error (device disconnected?):', e);
+            } finally {
+                try { reader.releaseLock(); } catch (e) { }
+                try { await port.close(); } catch (e) { }
+                port = null;
+                setDisconnectedUI();
+            }
+        }
+
+        let currentInitCmds = "";
+        let currentUiState = {};
+
+        let currentSda = 4, currentScl = 5;
+        let currentSmartI2C = 1;
+        let currentIms = 2, currentEq = 1, currentNb = 1, currentHc = 1, currentLc = 1, currentDeemph = 500;
+        let currentAmAtten = 0, currentAmCoChan = 0;
+
+        function openAdvanced() {
+            if (document.getElementById('tutOverlay').style.display === 'block') return;
+            document.getElementById('advModal').style.display = 'flex';
+            send('R');
+
+            const isFM = currentBand === 1;
+            document.getElementById('section_fm').style.opacity = isFM ? '1' : '0.4';
+            document.getElementById('section_fm').style.pointerEvents = isFM ? 'auto' : 'none';
+            document.getElementById('section_am').style.opacity = !isFM ? '1' : '0.4';
+            document.getElementById('section_am').style.pointerEvents = !isFM ? 'auto' : 'none';
+
+            document.getElementById('set_autoScan').checked = currentUiState.autoScan !== false;
+            document.getElementById('set_autoTune').checked = currentUiState.autoTune !== false;
+            document.getElementById('set_smartI2C').checked = currentSmartI2C === 1;
+
+            document.getElementById('set_ims').value = currentIms;
+            document.getElementById('set_eq').checked = currentEq === 1;
+            document.getElementById('set_nb').checked = currentNb === 1;
+            document.getElementById('set_hc').checked = currentHc === 1;
+            document.getElementById('set_deemph').value = currentDeemph;
+
+            document.getElementById('set_am_atten').value = currentAmAtten;
+            document.getElementById('set_am_cochan').value = currentAmCoChan;
+            document.getElementById('set_lc').checked = currentLc === 1;
+
+            if (currentUiState.softmute !== undefined) {
+                document.getElementById('set_softmute').value = currentUiState.softmute;
+                document.getElementById('val_softmute').innerText = currentUiState.softmute + ' dBµV';
+            }
+            if (currentUiState.stereo !== undefined) {
+                document.getElementById('set_stereo').value = currentUiState.stereo;
+                document.getElementById('val_stereo').innerText = currentUiState.stereo + ' dBµV';
+            }
+            if (currentUiState.highcut !== undefined) {
+                document.getElementById('set_highcut').value = currentUiState.highcut;
+                document.getElementById('val_highcut').innerText = currentUiState.highcut + ' dBµV';
+            }
+
+            document.getElementById('set_sda').value = currentSda;
+            document.getElementById('set_scl').value = currentScl;
+
+            document.getElementById('set_ssid').value = data.ssid || "";
+            document.getElementById('set_lat').value = manualLat;
+            document.getElementById('set_lon').value = manualLon;
+
+            document.getElementById('advCmds').value = currentInitCmds.split(';').filter(c => c.trim() !== '').join('\n');
+
+            refreshAudioDevices();
+        }
+
+        function closeAdvanced() {
+            document.getElementById('advModal').style.display = 'none';
+        }
+
+        function resetAdvanced() {
+            if (!confirm("Reset all settings to default? I2C pins will revert to 4 (SDA) and 5 (SCL).")) return;
+            document.getElementById('set_autoScan').checked = false;
+            document.getElementById('set_autoTune').checked = true;
+            document.getElementById('set_smartI2C').checked = false;
+            document.getElementById('set_softmute').value = 15;
+            document.getElementById('val_softmute').innerText = '15 dBµV';
+            document.getElementById('set_stereo').value = 30;
+            document.getElementById('val_stereo').innerText = '30 dBµV';
+            document.getElementById('set_highcut').value = 25;
+            document.getElementById('val_highcut').innerText = '25 dBµV';
+            document.getElementById('set_sda').value = 4;
+            document.getElementById('set_scl').value = 5;
+            document.getElementById('advCmds').value = "";
+        }
+
+        function saveAdvanced() {
+            const sm = parseInt(document.getElementById('set_softmute').value);
+            const st = parseInt(document.getElementById('set_stereo').value);
+            const hc_thresh = parseInt(document.getElementById('set_highcut').value);
+            const sda = parseInt(document.getElementById('set_sda').value);
+            const scl = parseInt(document.getElementById('set_scl').value);
+            const smartI2C = document.getElementById('set_smartI2C').checked ? 1 : 0;
+
+            const ims = document.getElementById('set_ims').value;
+            const deemph = document.getElementById('set_deemph').value;
+            const eq = document.getElementById('set_eq').checked ? 1 : 0;
+            const nb = document.getElementById('set_nb').checked ? 1 : 0;
+            const hc = document.getElementById('set_hc').checked ? 1 : 0;
+            const lc = document.getElementById('set_lc').checked ? 1 : 0;
+            const am_atten = document.getElementById('set_am_atten').value;
+            const am_cochan = document.getElementById('set_am_cochan').value;
+
+            currentUiState = {
+                autoScan: document.getElementById('set_autoScan').checked,
+                autoTune: document.getElementById('set_autoTune').checked,
+                softmute: sm,
+                stereo: st,
+                highcut: hc_thresh
+            };
+
+            let cmds = [];
+            cmds.push(`32,42,1,1,${sm * 10},100`);
+            cmds.push(`32,62,1,1,${st * 10},120`);
+            cmds.push(`32,52,1,1,${hc_thresh * 10},200`);
+
+            const lines = document.getElementById('advCmds').value.split('\n');
+            let custom = lines.map(l => l.trim().replace(/\s+/g, '')).filter(l => l !== '');
+            if (custom.length > 0) {
+                cmds = cmds.concat(custom);
+            }
+
+            let packed = cmds.join(';') + ';';
+
+            const am_agc = document.getElementById('set_am_agc').value;
+            const am_audio_nb = document.getElementById('set_am_audio_nb').checked ? 1 : 0;
+            const am_softmute = document.getElementById('set_am_softmute').checked ? 1 : 0;
+
+            let queue = [
+                'W' + packed,
+                'Z' + smartI2C,
+                'J' + JSON.stringify(currentUiState),
+                'M' + ims,
+                'D' + deemph,
+                'E' + eq,
+                'N' + nb,
+                'H' + hc,
+                'L' + lc,
+                'Y' + am_atten,
+                'K' + am_cochan,
+                'G' + am_agc,
+                'N' + am_audio_nb,
+                'T' + am_softmute
+            ];
+
+            const newSsid = document.getElementById('set_ssid').value.trim();
+            const newPass = document.getElementById('set_pass').value.trim();
+            if (newSsid && newPass) {
+                queue.push('V' + newSsid + ',' + newPass);
+            }
+
+            manualLat = parseFloat(document.getElementById('set_lat').value);
+            manualLon = parseFloat(document.getElementById('set_lon').value);
+            localStorage.setItem('radio_lat', manualLat);
+            localStorage.setItem('radio_lon', manualLon);
+
+            let delay = 0;
+            queue.forEach(qCmd => {
+                setTimeout(() => {
+                    lastSendTime = 0;
+                    send(qCmd);
+                }, delay);
+                delay += 35;
+            });
+
+            currentSmartI2C = smartI2C;
+            currentIms = parseInt(ims);
+            currentDeemph = parseInt(deemph);
+            currentEq = eq;
+            currentNb = nb;
+            currentHc = hc;
+            currentLc = lc;
+            currentAmAtten = parseInt(am_atten);
+            currentAmCoChan = parseInt(am_cochan);
+
+            const saveBtn = document.querySelector('#advModal .btn-active');
+            if (saveBtn) {
+                const origText = saveBtn.innerText;
+                saveBtn.innerText = "SAVED ✓";
+                saveBtn.style.background = "#00ffaa";
+                saveBtn.style.color = "#000";
+                setTimeout(() => {
+                    saveBtn.innerText = origText;
+                    saveBtn.style.background = "";
+                    saveBtn.style.color = "";
+                    closeAdvanced();
+                }, 800);
+            } else {
+                closeAdvanced();
+            }
+
+            if (sda !== currentSda || scl !== currentScl) {
+                if (confirm(`Hardware pins changed (SDA:${sda}, SCL:${scl}). Apply and restart radio?`)) {
+                    setTimeout(() => { lastSendTime = 0; send(`C${sda},${scl}`); }, delay + 100);
+                }
+            }
+        }
+
+        function processIncoming(str) {
+            const data = JSON.parse(str);
+            if (!data) return;
+
+            if (data.initCmds !== undefined) {
+                currentInitCmds = data.initCmds;
+                if (data.uiState) currentUiState = data.uiState;
+                if (data.smartI2C !== undefined) {
+                    currentSmartI2C = data.smartI2C;
+                    const stBox = document.getElementById('set_smartI2C');
+                    if (stBox) stBox.checked = (currentSmartI2C === 1);
+                }
+                if (data.ims !== undefined) currentIms = data.ims;
+                if (data.eq !== undefined) currentEq = data.eq;
+                if (data.nb !== undefined) currentNb = data.nb;
+                if (data.hc !== undefined) currentHc = data.hc;
+                if (data.lc !== undefined) currentLc = data.lc;
+                if (data.deemph !== undefined) currentDeemph = data.deemph;
+                if (data.sda !== undefined) currentSda = data.sda;
+                if (data.scl !== undefined) currentScl = data.scl;
+                if (data.am_atten !== undefined) currentAmAtten = data.am_atten;
+                if (data.am_cochan !== undefined) currentAmCoChan = data.am_cochan;
+                if (data.am_agc !== undefined) currentAmAgc = data.am_agc;
+                if (data.am_audio_nb !== undefined) currentAmAudioNB = data.am_audio_nb;
+                if (data.am_softmute !== undefined) currentAmSoftMute = data.am_softmute;
+
+                if (document.getElementById('advModal').style.display === 'flex') {
+                    document.getElementById('set_sda').value = currentSda;
+                    document.getElementById('set_scl').value = currentScl;
+                    document.getElementById('set_ims').value = currentIms;
+                    document.getElementById('set_deemph').value = currentDeemph;
+                    document.getElementById('set_eq').checked = (currentEq === 1);
+                    document.getElementById('set_nb').checked = (currentNb === 1);
+                    document.getElementById('set_hc').checked = (currentHc === 1);
+                    document.getElementById('set_lc').checked = (currentLc === 1);
+                    document.getElementById('set_am_atten').value = currentAmAtten;
+                    document.getElementById('set_am_cochan').value = currentAmCoChan;
+                    document.getElementById('set_am_agc').value = currentAmAgc;
+                    document.getElementById('agcVal').innerText = (currentAmAgc / 10) + ' dBuV';
+                    document.getElementById('set_am_audio_nb').checked = (currentAmAudioNB === 1);
+                    document.getElementById('set_am_softmute').checked = (currentAmSoftMute === 1);
+                    document.getElementById('set_ssid').value = data.ssid || "";
+                    document.getElementById('advCmds').value = currentInitCmds.split(';').filter(c => c.trim() !== '').join('\n');
+                }
+                return;
+            }
+
+            if (data.rds) {
+                rds.process(data.rds);
+                updateRDSUI();
+                return;
+            }
+
+            if (data.f === undefined || data.s === undefined) return;
+
+            if (data.i2cSleep !== undefined) {
+                isI2CSleep = !!data.i2cSleep;
+                document.getElementById('badgeSleep').style.display = isI2CSleep ? 'block' : 'none';
+                updateRDSUI();
+            }
+
+            document.getElementById('badgeMute').style.display = isMuted ? 'block' : 'none';
+
+            if (isScanning || data.f === currentFreq) {
+                const scanData = getScanData();
+                const prev = scanData.get(data.f) || data.s;
+                scanData.set(data.f, data.s * 0.7 + prev * 0.3);
+                scanDataDirty = true;
+            }
+
+            if (!isScanning && data.f !== currentFreq) {
+                currentFreq = data.f;
+                rds.reset();
+                updateRDSUI();
+            }
+
+            if (data.s !== undefined) smoothRSSI = smoothRSSI * 0.8 + data.s * 0.2;
+
+            if (data.f !== undefined) {
+                const displayFreq = (data.m === 1) ? (data.f / 100).toFixed(2) : data.f;
+                document.getElementById('fMain').innerText = displayFreq;
+            }
+            document.getElementById('sigVal').innerText = smoothRSSI.toFixed(1);
+            document.getElementById('offVal').innerText = data.o;
+
+            updateRDSUI();
+
+            if (data.m === 1) {
+                const snrRaw = parseFloat(data.snr || 0);
+                const rssiRaw = parseFloat(data.s || 0);
+                const usnRaw = parseFloat(data.usn || 0);
+                const wamRaw = parseFloat(data.wam || 0);
+
+                let displaySNR = 0;
+                let isHardware = false;
+
+                if (snrRaw < 100 && snrRaw > 0) {
+                    displaySNR = snrRaw;
+                    isHardware = true;
+                    document.getElementById('bwLabel').innerText = "QUALITY";
+                    document.getElementById('bwVal').innerText = (snrRaw * 1.6).toFixed(0);
+                    document.getElementById('bwUnit').innerText = "%";
+                } else {
+                    displaySNR = rssiRaw - 2.0 - (usnRaw / 4.0) - (wamRaw / 5.0);
+                    if (displaySNR < 0) displaySNR = 0;
+                    if (displaySNR > 58) displaySNR = 58;
+
+                    document.getElementById('bwLabel').innerText = "IF BW";
+                    document.getElementById('bwVal').innerText = data.bw || "--";
+                    document.getElementById('bwUnit').innerText = "kHz";
+                }
+
+                const snrEl = document.getElementById('snrVal');
+                if (snrEl) {
+                    snrEl.innerText = displaySNR.toFixed(1);
+                    snrEl.title = isHardware ? "Hardware-reported SNR" : "Estimated SNR based on RSSI/USN/WAM";
+                }
+            } else {
+                document.getElementById('bwLabel').innerText = "IF BW";
+                document.getElementById('bwVal').innerText = data.bw || "--";
+                document.getElementById('bwUnit').innerText = "kHz";
+
+                const snrEl = document.getElementById('snrVal');
+                if (snrEl) {
+                    snrEl.innerText = (data.snr !== undefined) ? data.snr.toFixed(1) : "--";
+                    snrEl.title = "Hardware-reported SNR (Module 33)";
+                }
+            }
+
+            document.getElementById('volVal').innerText = (data.v !== undefined) ? data.v : "--";
+
+            if (window._targetVol !== undefined && data.v !== undefined && !data.i2cSleep) {
+                const now = Date.now();
+                if (!window._lastVolTime || now - window._lastVolTime > 300) {
+                    if (data.v < window._targetVol) {
+                        send('v');
+                        window._lastVolTime = now;
+                    } else if (data.v > window._targetVol) {
+                        send('b');
+                        window._lastVolTime = now;
+                    } else {
+                        window._targetVol = undefined;
+                    }
+                }
+            }
+
+            document.getElementById('modeVal').innerText = (data.m === 1) ? "FM" : (data.m === 2 ? "AM" : "--");
+            if (document.getElementById('usnVal')) document.getElementById('usnVal').innerText = (data.usn !== undefined) ? data.usn.toFixed(1) : "0.0";
+            if (document.getElementById('wamVal')) document.getElementById('wamVal').innerText = (data.wam !== undefined) ? data.wam.toFixed(1) : "0.0";
+            if (document.getElementById('modVal')) document.getElementById('modVal').innerText = (data.mod !== undefined) ? data.mod.toFixed(1) : "0.0";
+
+            if (document.getElementById('stereoVal')) {
+                const stEl = document.getElementById('stereoVal');
+                if (data.m === 1 && data.st !== undefined) {
+                    if (data.st === 1) {
+                        const blendPct = data.sb !== undefined ? Math.max(0, Math.min(100, Math.round(100 - (data.sb / 10)))) : 100;
+                        if (blendPct < 100) {
+                            stEl.innerHTML = `STEREO <small style="font-size:10px; opacity:0.7">(${blendPct}%)</small>`;
+                            stEl.style.color = "var(--warn)";
+                        } else {
+                            stEl.textContent = "STEREO";
+                            stEl.style.color = "var(--accent)";
+                        }
+                    } else {
+                        stEl.textContent = "MONO";
+                        stEl.style.color = "var(--dim)";
+                    }
+                } else {
+                    stEl.textContent = data.m === 2 ? "AM MODE" : "MONO";
+                    stEl.style.color = "var(--dim)";
+                }
+            }
+
+            const stability = Math.exp(-Math.abs(data.o) / 5) * 100;
+            document.getElementById('stabVal').innerText = Math.round(stability);
+
+            if (!isScanning) {
+                currentFreq = data.f;
+                document.getElementById('sysStatus').innerText = "LIVE AUDIO";
+                document.getElementById('sysStatus').style.color = "var(--accent)";
+                document.getElementById('sysStatus').style.fontWeight = "normal";
+
+                if (data.i2cSleep) {
+                    document.getElementById('sysStatus').innerText = "\u25cf QUIET MODE";
+                    document.getElementById('sysStatus').style.color = "#ffaa00";
+                    document.getElementById('sysStatus').style.fontWeight = "bold";
+                }
+
+                if (data.m === 1) {
+                    const unixSecs = Math.floor(Date.now() / 1000);
+                    const isoTime = new Date().toISOString();
+                    const freqHz = data.f * 10000;
+                    let piHex = rds.pi > 0 ? rds.pi.toString(16).toUpperCase().padStart(4, '0') : "";
+                    let psStr = rds.getPS() || "";
+                    let rssiStr = Math.round(data.s);
+                    let lat = manualLat;
+                    let lon = manualLon;
+                    if (lat === 0 && lon === 0 && autoPos.lat !== 0) {
+                        lat = autoPos.lat;
+                        lon = autoPos.lon;
+                    }
+                    const urdsStr = `${unixSecs}, freq, ${freqHz}, 1, ${rssiStr}, ${rssiStr}, ${isoTime}, ${lat.toFixed(6)}, ${lon.toFixed(6)}, 10, ${piHex}, ${psStr}`;
+                    document.getElementById('urdsLiveBox').value = urdsStr;
+                }
+            }
+        }
+
+        function render() {
+            const w = canvas.width / dpr;
+            const h = canvas.height / dpr;
+
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, w, h);
+
+            const minF = viewCenter - viewSpan / 2;
+            const maxF = viewCenter + viewSpan / 2;
+            const fToX = f => ((f - minF) / (maxF - minF)) * w;
+
+            ctx.strokeStyle = '#111';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 10; i++) {
+                const x = (i / 10) * w;
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+                const fLabel = minF + (i / 10) * (maxF - minF);
+                ctx.fillStyle = '#333';
+                ctx.font = '10px monospace';
+                ctx.fillText((fLabel / 100).toFixed(2), x + 3, h - 6);
+            }
+
+            ctx.strokeStyle = '#0a0a0a';
+            for (let sig = 20; sig <= 80; sig += 20) {
+                const y = h - (sig / 85) * h;
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+                ctx.fillStyle = '#222';
+                ctx.fillText(sig, 3, y - 3);
+            }
+
+            if (scanDataDirty) {
+                const now = Date.now();
+                if (!window._lastSortTime) window._lastSortTime = 0;
+
+                if (!isScanning || (now - window._lastSortTime > 150)) {
+                    scanDataSorted = Array.from(getScanData().entries()).sort((a, b) => a[0] - b[0]);
+                    scanDataDirty = false;
+                    window._lastSortTime = now;
+                }
+            }
+
+            if (scanDataSorted.length > 0) {
+                let lo = 0, hi = scanDataSorted.length;
+                while (lo < hi) {
+                    const mid = (lo + hi) >> 1;
+                    if (scanDataSorted[mid][0] < minF) lo = mid + 1; else hi = mid;
+                }
+                const startIdx = Math.max(0, lo - 1);
+
+                lo = startIdx; hi = scanDataSorted.length;
+                while (lo < hi) {
+                    const mid = (lo + hi) >> 1;
+                    if (scanDataSorted[mid][0] <= maxF) lo = mid + 1; else hi = mid;
+                }
+                const endIdx = Math.min(scanDataSorted.length - 1, lo);
+
+                const pixelStep = Math.max(1, Math.floor((endIdx - startIdx) / (w * 2)));
+
+                ctx.beginPath();
+                let firstF = scanDataSorted[startIdx][0];
+                ctx.moveTo(fToX(firstF), h);
+                let first = true;
+                for (let i = startIdx; i <= endIdx; i += pixelStep) {
+                    const f = scanDataSorted[i][0];
+                    const s = scanDataSorted[i][1];
+                    const x = fToX(f);
+                    const y = h - Math.max(0, Math.min(85, s)) * (h / 85);
+                    if (first) { ctx.lineTo(x, y); first = false; }
+                    else ctx.lineTo(x, y);
+                }
+                let lastF = scanDataSorted[Math.min(endIdx, scanDataSorted.length - 1)][0];
+                ctx.lineTo(fToX(lastF), h);
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(0, 255, 170, 0.08)';
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.strokeStyle = '#00ffaa';
+                ctx.lineWidth = 1.5;
+                first = true;
+                for (let i = startIdx; i <= endIdx; i += pixelStep) {
+                    const f = scanDataSorted[i][0];
+                    const s = scanDataSorted[i][1];
+                    const x = fToX(f);
+                    const y = h - Math.max(0, Math.min(85, s)) * (h / 85);
+                    if (first) { ctx.moveTo(x, y); first = false; }
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+
+            if (squelchEnabled) {
+                const sqY = h - (squelchLevel / 85) * h;
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(255, 60, 100, 0.8)';
+                ctx.setLineDash([4, 4]);
+                ctx.lineWidth = 1;
+                ctx.moveTo(0, sqY);
+                ctx.lineTo(w, sqY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                ctx.fillStyle = 'rgba(255, 60, 100, 0.9)';
+                ctx.font = '10px monospace';
+                ctx.fillText('SQ ' + Math.round(squelchLevel), w - 45, sqY - 4);
+            }
+
+            const currentFreqX = fToX(currentFreq);
+            if (currentFreqX >= 0 && currentFreqX <= w) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(255, 204, 0, 0.8)';
+                ctx.lineWidth = 2;
+                ctx.moveTo(currentFreqX, 0);
+                ctx.lineTo(currentFreqX, h);
+                ctx.stroke();
+            }
+
+            if (showLabels && currentBand === 1 && filteredStationMap.size > 0 && scanDataSorted.length > 0) {
+                const labelPositions = [];
+
+                filteredStationMap.forEach((info, freq) => {
+                    const x = fToX(freq);
+                    if (x < -50 || x > w + 50) return;
+
+                    const scanData = getScanData();
+                    let signal = Math.max(
+                        scanData.get(freq) || 0,
+                        scanData.get(freq - 10) || 0,
+                        scanData.get(freq + 10) || 0
+                    );
+
+                    const labelThreshold = squelchEnabled ? squelchLevel : 15;
+                    if (signal < labelThreshold) return;
+
+                    const peakY = h - Math.max(0, Math.min(85, signal)) * (h / 85);
+
+                    let labelY = peakY - 18;
+                    let shifted = true;
+                    while (shifted) {
+                        shifted = false;
+                        for (const placed of labelPositions) {
+                            if (Math.abs(x - placed.x) < 60 && Math.abs(labelY - placed.y) < 14) {
+                                labelY -= 14;
+                                shifted = true;
+                            }
+                        }
+                    }
+                    labelY = Math.max(10, labelY);
+                    labelPositions.push({ x, y: labelY });
+
+                    ctx.beginPath();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                    ctx.lineWidth = 1;
+                    ctx.moveTo(x, peakY);
+                    ctx.lineTo(x, labelY + 10);
+                    ctx.stroke();
+
+                    ctx.font = 'bold 9px Inter, system-ui, sans-serif';
+                    const nameText = info.name.length > 16 ? info.name.substring(0, 15) + '…' : info.name;
+                    const textW = ctx.measureText(nameText).width;
+
+                    const pillX = x - textW / 2 - 4;
+                    const pillW = textW + 8;
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+                    ctx.beginPath();
+                    ctx.roundRect(pillX, labelY - 3, pillW, 14, 3);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(0, 255, 170, 0.4)';
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#fff';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(nameText, x, labelY + 8);
+                    ctx.textAlign = 'left';
+
+                    if (info.tags && labelY + 20 < peakY - 2) {
+                        const tag = info.tags.split(',')[0].trim();
+                        if (tag) {
+                            ctx.font = '7px monospace';
+                            ctx.fillStyle = 'rgba(0, 255, 170, 0.5)';
+                            ctx.textAlign = 'center';
+                            ctx.fillText(tag.toUpperCase(), x, labelY + 19);
+                            ctx.textAlign = 'left';
+                        }
+                    }
+
+                    ctx.fillStyle = 'rgba(0, 255, 170, 0.9)';
+                    ctx.beginPath();
+                    ctx.moveTo(x, peakY - 3);
+                    ctx.lineTo(x + 3, peakY);
+                    ctx.lineTo(x, peakY + 3);
+                    ctx.lineTo(x - 3, peakY);
+                    ctx.closePath();
+                    ctx.fill();
+                });
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            const factor = 1.2;
+            if (e.deltaY < 0) viewSpan /= factor; else viewSpan *= factor;
+            viewSpan = Math.max(100, Math.min(viewSpan, 50000));
+        }, { passive: false });
+
+        canvas.addEventListener('mousedown', e => {
+            const rect = canvas.getBoundingClientRect();
+            const y = e.clientY - rect.top;
+
+            if (squelchEnabled) {
+                const sqY = rect.height - (squelchLevel / 85) * rect.height;
+                if (Math.abs(y - sqY) < 15) {
+                    isDraggingSquelch = true;
+                    return;
+                }
+            }
+
+            isDragging = true;
+            didDrag = false;
+            lastMouseX = e.clientX;
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            isDraggingSquelch = false;
+        });
+
+        canvas.addEventListener('mousemove', e => {
+            const rect = canvas.getBoundingClientRect();
+            const y = e.clientY - rect.top;
+
+            if (squelchEnabled) {
+                const sqY = rect.height - (squelchLevel / 85) * rect.height;
+                if (Math.abs(y - sqY) < 15 || isDraggingSquelch) {
+                    canvas.style.cursor = 'ns-resize';
+                } else if (!isDraggingSquelch) {
+                    canvas.style.cursor = 'grab';
+                }
+            } else {
+                canvas.style.cursor = 'grab';
+            }
+
+            if (isDraggingSquelch) {
+                let newSq = 85 - (y / rect.height) * 85;
+                squelchLevel = Math.max(0, Math.min(85, newSq));
+                return;
+            }
+
+            if (!isDragging) return;
+            const dx = e.clientX - lastMouseX;
+            if (Math.abs(dx) > 2) didDrag = true;
+            lastMouseX = e.clientX;
+            viewCenter -= dx * (viewSpan / (canvas.width / dpr));
+        });
+
+        canvas.addEventListener('click', e => {
+            if (didDrag || isScanning) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const minF = viewCenter - viewSpan / 2;
+            const clickedFreq = minF + (x / rect.width) * viewSpan;
+
+            const windowSize = viewSpan * 0.02;
+            let bestF = Math.round(clickedFreq), maxS = -1;
+            const scanData = getScanData();
+            scanData.forEach((s, f) => {
+                if (Math.abs(f - clickedFreq) < windowSize && s > maxS) { maxS = s; bestF = f; }
+            });
+            tuneTo(bestF);
+        });
+
+        let currentFreq = 9775;
+
+        function tuneTo(f) {
+            currentFreq = f;
+            viewCenter = f;
+            document.getElementById('sysStatus').innerText = "TUNING...";
+            document.getElementById('sysStatus').style.color = "white";
+
+            rds.reset();
+            document.getElementById('psMain').innerText = "TUNING...";
+            document.getElementById('rdsRTHeader').innerText = "... WAITING FOR RDS ...";
+            document.getElementById('rdsRTPanel').innerText = "Waiting for Radio Text...";
+            document.getElementById('rdsRTHeader').classList.remove('animate-scroll');
+
+            if (currentBand === 1) {
+                document.getElementById('manualInput').value = (f / 100).toFixed(2);
+            } else {
+                document.getElementById('manualInput').value = f;
+            }
+            send((currentBand === 1 ? "F" : "A") + f);
+        }
+
+        function stepFreq(delta) {
+            tuneTo(currentFreq + delta);
+        }
+
+        window.addEventListener('keydown', e => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+            const step = currentBand === 1 ? 10 : 5;
+
+            if (e.key === 'a' || e.key === 'A') {
+                stepFreq(-step);
+            } else if (e.key === 'd' || e.key === 'D') {
+                stepFreq(step);
+            }
+        });
+
+        function manualTune() {
+            let input = document.getElementById('manualInput').value;
+            if (!input) return;
+            let f = parseFloat(input);
+            if (isNaN(f) || f <= 0) return;
+            if (currentBand === 1) {
+                f = Math.round(f * 100);
+            } else {
+                f = Math.round(f);
+            }
+            tuneTo(f);
+        }
+        document.getElementById('manualInput').addEventListener('keydown', e => {
+            if (e.key === 'Enter') manualTune();
+        });
+
+        function tuneStrongest() {
+            const scanData = getScanData();
+            let bestF = 0, maxS = 5;
+            scanData.forEach((s, f) => { if (s > maxS) { maxS = s; bestF = f; } });
+            if (bestF) tuneTo(bestF);
+        }
+
+        function tuneNext(dir) {
+            const scanData = getScanData();
+            if (scanData.size < 3) return;
+
+            const freqs = Array.from(scanData.keys()).sort((a, b) => a - b);
+
+            const peaks = [];
+            for (let i = 1; i < freqs.length - 1; i++) {
+                const prev = scanData.get(freqs[i - 1]);
+                const curr = scanData.get(freqs[i]);
+                const next = scanData.get(freqs[i + 1]);
+
+                const threshold = squelchEnabled ? squelchLevel : 10;
+                if (curr > prev && curr > next && curr > threshold) {
+                    peaks.push(freqs[i]);
+                }
+            }
+
+            if (peaks.length === 0) return;
+
+            let targetF = null;
+
+            if (dir > 0) {
+                for (let f of peaks) {
+                    if (f > currentFreq) {
+                        targetF = f;
+                        break;
+                    }
+                }
+                if (targetF === null) {
+                    targetF = peaks[0];
+                }
+            } else {
+                for (let i = peaks.length - 1; i >= 0; i--) {
+                    if (peaks[i] < currentFreq) {
+                        targetF = peaks[i];
+                        break;
+                    }
+                }
+                if (targetF === null) {
+                    targetF = peaks[peaks.length - 1];
+                }
+            }
+
+            if (targetF !== null) {
+                tuneTo(targetF);
+            }
+        }
+
+        let activeScanBtn = null;
+        async function toggleScan(type) {
+            if (isScanning) {
+                isScanning = false;
+                await send("X");
+                if (activeScanBtn) { activeScanBtn.classList.remove('btn-active'); activeScanBtn = null; }
+                document.getElementById('sysStatus').innerText = "SCAN STOPPED";
+                document.getElementById('sysStatus').style.color = "var(--dim)";
+                return;
+            }
+            isScanning = true;
+            activeScanBtn = document.getElementById(type === 'S' ? 'scanS' : 'scanQ');
+            if (activeScanBtn) activeScanBtn.classList.add('btn-active');
+            getScanData().clear();
+            scanDataSorted = [];
+            scanDataDirty = false;
+            document.getElementById('sysStatus').innerText = "SCANNING...";
+            document.getElementById('sysStatus').style.color = "var(--warn)";
+            await send(type);
+
+            await new Promise(r => setTimeout(r, 400));
+
+            let start, end, step;
+            if (currentBand === 1) { start = 8750; end = 10800; step = 10; }
+            else if (currentBand === 2) { start = 522; end = 1710; step = 9; }
+            else { start = 5900; end = 18000; step = 5; }
+
+            for (let f = start; f <= end; f += step) {
+                if (!isScanning) break;
+                await send((currentBand === 1 ? "F" : "A") + f);
+                await new Promise(r => setTimeout(r, type === 'Q' ? 35 : 85));
+                const scanData = getScanData();
+                const sig = scanData.get(f) || 0;
+                if (sig > 25) {
+                    const label = currentBand === 1 ? (f / 100).toFixed(2) : f;
+                    const row = `<div class="log-row"><span>${label}</span><b>${sig.toFixed(1)}</b></div>`;
+                    const logEl = document.getElementById('log');
+                    logEl.insertAdjacentHTML('afterbegin', row);
+
+                    if (logEl.children.length > 50) {
+                        logEl.removeChild(logEl.lastElementChild);
+                    }
+                }
+            }
+            isScanning = false;
+            if (activeScanBtn) { activeScanBtn.classList.remove('btn-active'); activeScanBtn = null; }
+            await send("X");
+            document.getElementById('sysStatus').innerText = "SCAN DONE";
+            document.getElementById('sysStatus').style.color = "var(--accent)";
+
+            if (currentUiState.autoTune !== false) {
+                setTimeout(() => tuneStrongest(), 100);
+            }
+        }
+
+        function updateBandwidth(val) {
+            if (val === 'auto') send('a');
+            else send('B' + val);
+        }
+
+        function switchBand(b) {
+            currentBand = b;
+            scanDataDirty = true;
+            scanDataSorted = [];
+            document.getElementById('uMain').innerText = (b === 1) ? 'MHz' : 'kHz';
+
+            const bwSel = document.getElementById('bwSelector');
+            bwSel.innerHTML = '';
+
+            if (b === 1) {
+                const fmOpts = [
+                    { l: 'AUTO', v: 'auto' }, { l: '56k', v: '560' }, { l: '64k', v: '640' }, { l: '72k', v: '720' },
+                    { l: '84k', v: '840' }, { l: '97k', v: '970' }, { l: '114k', v: '1140' }, { l: '133k', v: '1330' },
+                    { l: '151k', v: '1510' }, { l: '168k', v: '1680' }, { l: '184k', v: '1840' }, { l: '200k', v: '2000' },
+                    { l: '217k', v: '2170' }, { l: '236k', v: '2360' }, { l: '287k', v: '2870' }, { l: '311k', v: '3110' }
+                ];
+                fmOpts.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o.v; opt.textContent = o.l;
+                    bwSel.appendChild(opt);
+                });
+            } else {
+                const amOpts = [
+                    { l: 'AUTO', v: 'auto' }, { l: '3.0k', v: '30' }, { l: '4.0k', v: '40' }, { l: '6.0k', v: '60' }, { l: '8.0k', v: '80' }
+                ];
+                amOpts.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o.v; opt.textContent = o.l;
+                    bwSel.appendChild(opt);
+                });
+            }
+
+            const isFM = (b === 1);
+            document.getElementById('dash_audio').style.display = isFM ? 'flex' : 'none';
+            document.getElementById('dash_usn').style.display = isFM ? 'flex' : 'none';
+            document.getElementById('dash_wam').style.display = isFM ? 'flex' : 'none';
+            document.getElementById('rdsPanel').style.display = isFM ? 'block' : 'none';
+
+            if (!isFM) {
+                rds.reset();
+                updateRDSUI();
+            }
+
+            if (b === 1) { viewCenter = 9775; viewSpan = 2200; }
+            else if (b === 2) { viewCenter = 1000; viewSpan = 1300; }
+            else { viewCenter = 10000; viewSpan = 13000; }
+
+            document.getElementById('bandFM').classList.toggle('btn-active', b === 1);
+            document.getElementById('bandMW').classList.toggle('btn-active', b === 2);
+            document.getElementById('bandSW').classList.toggle('btn-active', b === 3);
+        }
+
+        let lastSendTime = 0;
+        async function send(m) {
+            const now = Date.now();
+            if (now - lastSendTime < 20) return;
+            lastSendTime = now;
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                try { ws.send(m); } catch (e) { console.error('WebSocket send error:', e); }
+                return;
+            }
+            if (!port || !port.writable) return;
+            let w;
+            try {
+                w = port.writable.getWriter();
+                await w.write(new TextEncoder().encode(m + "\n"));
+            } catch (e) {
+                console.error('Serial write error:', e);
+            } finally {
+                if (w) try { w.releaseLock(); } catch (e) { }
+            }
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            const btn = document.getElementById('muteBtn');
+            if (isMuted) {
+                send('m');
+                btn.innerText = "UNMUTE";
+                btn.style.color = "var(--warn)";
+                btn.style.borderColor = "var(--warn)";
+            } else {
+                send('u');
+                btn.innerText = "MUTE";
+                btn.style.color = "#fff";
+                btn.style.borderColor = "#333";
+            }
+        }
+
+        let isMono = false;
+        function toggleMono() {
+            isMono = !isMono;
+            const btn = document.getElementById('monoBtn');
+            if (isMono) {
+                send('O');
+                btn.innerText = "MONO";
+                btn.style.color = "var(--warn)";
+                btn.style.borderColor = "var(--warn)";
+            } else {
+                send('P');
+                btn.innerText = "AUTO ST";
+                btn.style.color = "#fff";
+                btn.style.borderColor = "#333";
+            }
+        }
+
+        let i2cActive = true;
+        function toggleI2C() {
+            i2cActive = !i2cActive;
+            const btn = document.getElementById('i2cBtn');
+            send('I');
+            if (i2cActive) {
+                btn.innerText = "I2C ON";
+                btn.style.color = "#fff";
+                btn.style.borderColor = "#333";
+            } else {
+                btn.innerText = "I2C OFF";
+                btn.style.color = "var(--warn)";
+                btn.style.borderColor = "var(--warn)";
+            }
+        }
+
+        function toggleSquelch() {
+            squelchEnabled = !squelchEnabled;
+            const btn = document.getElementById('sqToggle');
+            btn.innerText = squelchEnabled ? 'SQUELCH ON' : 'SQUELCH OFF';
+            if (squelchEnabled) {
+                btn.style.color = '#000';
+                btn.style.background = 'var(--accent)';
+            } else {
+                btn.style.color = 'var(--dim)';
+                btn.style.background = '#222';
+            }
+        }
+
+        function exportCSV() {
+            if (scanDataSorted.length === 0) {
+                alert("No scan data available to export. Run a sweep first.");
+                return;
+            }
+
+            let csv = "Frequency (MHz/kHz),Signal Strength (dBµV)\n";
+            scanDataSorted.forEach(row => {
+                let freqLabel = currentBand === 1 ? (row[0] / 100).toFixed(2) : row[0];
+                csv += `${freqLabel},${row[1].toFixed(1)}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            const bandName = currentBand === 1 ? "FM" : (currentBand === 2 ? "MW" : "SW");
+
+            link.setAttribute("href", url);
+            link.setAttribute("download", `TEF6686_${bandName}_Sweep.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        const RADIO_API = 'https://de1.api.radio-browser.info';
+
+        const COUNTRY_NEIGHBORS = {
+            'DK': ['DK', 'SE', 'NO', 'DE', 'PL'], 'SE': ['SE', 'DK', 'NO', 'FI', 'DE', 'PL'],
+            'NO': ['NO', 'SE', 'DK', 'FI', 'GB'], 'FI': ['FI', 'SE', 'NO', 'RU'],
+            'DE': ['DE', 'NL', 'BE', 'FR', 'AT', 'CH', 'PL', 'CZ', 'DK'],
+            'NL': ['NL', 'DE', 'BE', 'GB'], 'BE': ['BE', 'NL', 'DE', 'FR', 'GB'],
+            'FR': ['FR', 'BE', 'DE', 'CH', 'IT', 'ES', 'GB'], 'GB': ['GB', 'IE', 'FR', 'NL', 'BE'],
+            'IE': ['IE', 'GB'], 'AT': ['AT', 'DE', 'CH', 'IT', 'CZ', 'HU'],
+            'CH': ['CH', 'DE', 'FR', 'IT', 'AT'], 'IT': ['IT', 'FR', 'CH', 'AT'],
+            'ES': ['ES', 'FR', 'PT'], 'PT': ['PT', 'ES'],
+            'PL': ['PL', 'DE', 'CZ', 'SE', 'DK'], 'CZ': ['CZ', 'DE', 'PL', 'AT', 'HU'],
+            'HU': ['HU', 'AT', 'CZ', 'RO'], 'RO': ['RO', 'HU'], 'GR': ['GR', 'TR'],
+            'TR': ['TR', 'GR'], 'US': ['US', 'CA', 'MX'], 'CA': ['CA', 'US'], 'MX': ['MX', 'US'],
+            'AU': ['AU'], 'NZ': ['NZ'], 'ZA': ['ZA'], 'BR': ['BR', 'AR'], 'AR': ['AR', 'BR'],
+            'JP': ['JP', 'KR'], 'KR': ['KR', 'JP'], 'IN': ['IN'], 'CN': ['CN'], 'RU': ['RU', 'FI']
+        };
+
+        async function geoToCountryCode(lat, lon) {
+            try {
+                const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=3`,
+                    { headers: { 'Accept-Language': 'en' } });
+                const d = await r.json();
+                return d.address && d.address.country_code ? d.address.country_code.toUpperCase() : null;
+            } catch (e) { return null; }
+        }
+
+        function extractFMFrequencies(station) {
+            const freqs = new Set();
+            const sources = [station.name || '', station.tags || ''];
+
+            for (const source of sources) {
+                const explicitRegex = /\b(8[7-9]|9[0-9]|10[0-8])([.,]\d{1,2})?\s*(?:FM|MHz)\b/ig;
+                let match;
+                while ((match = explicitRegex.exec(source)) !== null) {
+                    const val = parseFloat(match[1] + (match[2] ? match[2].replace(',', '.') : ''));
+                    if (val >= 87.5 && val <= 108.0) freqs.add(Math.round(val * 100));
+                }
+
+                const decimalRegex = /\b(8[7-9]|9[0-9]|10[0-8])[.,](\d{1,2})\b/g;
+                while ((match = decimalRegex.exec(source)) !== null) {
+                    const val = parseFloat(match[0].replace(',', '.'));
+                    if (val >= 87.5 && val <= 108.0) freqs.add(Math.round(val * 100));
+                }
+            }
+            return Array.from(freqs);
+        }
+
+        async function loadStationsByLocation() {
+            const btn = document.getElementById('geoBtn');
+            btn.innerText = '📍 LOCATING...'; btn.style.color = 'var(--warn)';
+            if (!navigator.geolocation) { btn.innerText = '📍 NOT SUPPORTED'; return; }
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const cc = await geoToCountryCode(pos.coords.latitude, pos.coords.longitude);
+                if (!cc) { btn.innerText = '📍 RESOLVE FAILED'; return; }
+                const neighbors = COUNTRY_NEIGHBORS[cc] || [cc];
+                btn.innerText = `📍 LOADING ${neighbors.join('+')}...`;
+                localStorage.setItem('radio_geo_countries', JSON.stringify(neighbors));
+                await loadStationsForCountries(neighbors);
+                btn.innerText = `📍 ${neighbors.join(' + ')}`;
+                btn.style.color = 'var(--accent)'; btn.style.borderColor = 'var(--accent)';
+            }, () => { btn.innerText = '📍 DENIED'; btn.style.color = '#ff4466'; }, { timeout: 10000 });
+        }
+
+        async function loadStationsForCountries(codes) {
+            if (!codes || !codes.length || !codes[0]) return;
+            document.getElementById('stationCount').innerText = 'Loading...';
+            const results = await Promise.all(codes.map(async cc => {
+                const ck = `radio_stations_v2_${cc}`;
+                const cached = localStorage.getItem(ck);
+                if (cached) {
+                    try {
+                        const d = JSON.parse(cached);
+                        if (d.ts && Date.now() - d.ts < 7 * 86400000) return d.stations;
+                    } catch (e) { }
+                }
+                try {
+                    const r = await fetch(`${RADIO_API}/json/stations/bycountrycodeexact/${cc}?limit=5000&order=votes&reverse=true`);
+                    const s = await r.json();
+                    try { localStorage.setItem(ck, JSON.stringify({ ts: Date.now(), stations: s })); } catch (e) { }
+                    return s;
+                } catch (e) { return []; }
+            }));
+            processStations(results.flat(), codes[0]);
+        }
+
+        function processStations(stations, primaryCountryCode = null) {
+            allStations = stations; fmStationMap.clear();
+            const allTags = new Map();
+            for (const s of stations) {
+                const freqs = extractFMFrequencies(s);
+                for (const freq of freqs) {
+                    if (!fmStationMap.has(freq)) fmStationMap.set(freq, []);
+                    const existing = fmStationMap.get(freq);
+                    if (!existing.find(e => e.name === s.name)) {
+                        existing.push({
+                            name: s.name, tags: s.tags || '',
+                            country: s.country, countrycode: s.countrycode || '', state: s.state || '', votes: s.votes || 0
+                        });
+                    }
+                }
+                if (s.tags) for (const tag of s.tags.split(',')) {
+                    const t = tag.trim().toLowerCase();
+                    if (t && t.length > 1) allTags.set(t, (allTags.get(t) || 0) + 1);
+                }
+            }
+
+            if (primaryCountryCode) {
+                fmStationMap.forEach((list) => {
+                    list.sort((a, b) => {
+                        const aPrimary = (a.countrycode === primaryCountryCode) ? 1 : 0;
+                        const bPrimary = (b.countrycode === primaryCountryCode) ? 1 : 0;
+                        if (aPrimary !== bPrimary) return bPrimary - aPrimary;
+                        return b.votes - a.votes;
+                    });
+                });
+            }
+
+            const sortedTags = [...allTags.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30);
+            const gs = document.getElementById('genreSelect');
+            gs.innerHTML = '<option value="">All Genres</option>';
+            for (const [tag, count] of sortedTags) {
+                const o = document.createElement('option'); o.value = tag;
+                o.textContent = tag.charAt(0).toUpperCase() + tag.slice(1) + ` (${count})`; gs.appendChild(o);
+            }
+            const pc = document.getElementById('tagPills'); pc.innerHTML = '';
+            for (const [tag] of sortedTags.slice(0, 15)) {
+                const p = document.createElement('span'); p.className = 'tag-pill'; p.textContent = tag;
+                p.onclick = () => toggleTagFilter(tag, p); pc.appendChild(p);
+            }
+            applyGenreFilter();
+            document.getElementById('stationCount').innerText = `${fmStationMap.size} FM stations matched`;
+        }
+
+        function applyGenreFilter() {
+            activeGenreFilter = document.getElementById('genreSelect').value;
+            rebuildFilteredMap();
+        }
+        function toggleTagFilter(tag, pill) {
+            if (activeTagFilters.has(tag)) { activeTagFilters.delete(tag); pill.classList.remove('active'); }
+            else { activeTagFilters.add(tag); pill.classList.add('active'); }
+            rebuildFilteredMap();
+        }
+        function rebuildFilteredMap() {
+            filteredStationMap.clear();
+            fmStationMap.forEach((stationList, freq) => {
+                const matchedStation = stationList.find(info => {
+                    const tags = info.tags.toLowerCase();
+                    if (activeGenreFilter && !tags.includes(activeGenreFilter)) return false;
+                    if (activeTagFilters.size > 0) {
+                        for (const t of activeTagFilters) {
+                            if (!tags.includes(t)) return false;
+                        }
+                    }
+                    return true;
+                });
+                if (matchedStation) {
+                    filteredStationMap.set(freq, matchedStation);
+                }
+            });
+            const total = fmStationMap.size, shown = filteredStationMap.size;
+            document.getElementById('stationCount').innerText =
+                (shown === total) ? `${total} FM frequencies` : `${shown} / ${total} freqs shown`;
+        }
+        function toggleLabels() {
+            showLabels = !showLabels;
+            const btn = document.getElementById('labelsToggle');
+            btn.innerText = showLabels ? 'LABELS ON' : 'LABELS OFF';
+            btn.style.color = showLabels ? '#000' : 'var(--dim)';
+            btn.style.background = showLabels ? 'var(--accent)' : '#222';
+        }
+        function clearStationCache() {
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith('radio_stations_')) localStorage.removeItem(k);
+            }
+            localStorage.removeItem('radio_geo_countries');
+            localStorage.removeItem('radio_use_default_db');
+            allStations = []; fmStationMap.clear(); filteredStationMap.clear();
+            document.getElementById('stationCount').innerText = 'Cache cleared';
+            document.getElementById('genreSelect').innerHTML = '<option value="">All Genres</option>';
+            document.getElementById('tagPills').innerHTML = '';
+            const b = document.getElementById('geoBtn');
+            b.innerText = '📍 USE MY LOCATION'; b.style.color = '#4488ff'; b.style.borderColor = '#4488ff';
+        }
+
+        function handleCSVUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target.result;
+                const lines = text.split(/\r?\n/);
+                if (lines.length < 2) return;
+
+                const sep = lines[0].includes(';') ? ';' : ',';
+                const headers = lines[0].toLowerCase().split(sep).map(h => h.trim());
+
+                let freqIdx = headers.findIndex(h => h.includes('mhz') || h.includes('freq'));
+                let nameIdx = headers.findIndex(h => h.includes('program') || h.includes('name') || h.includes('station'));
+
+                if (freqIdx === -1) freqIdx = 0;
+                if (nameIdx === -1) nameIdx = 4;
+
+                fmStationMap.clear();
+                allStations = [];
+                const allTags = new Map();
+
+                let added = 0;
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    let cols = [];
+                    let inQuotes = false;
+                    let current = '';
+                    for (let c of lines[i]) {
+                        if (c === '"') inQuotes = !inQuotes;
+                        else if (c === sep && !inQuotes) { cols.push(current); current = ''; }
+                        else current += c;
+                    }
+                    cols.push(current);
+
+                    if (cols.length > Math.max(freqIdx, nameIdx)) {
+                        const freqStr = cols[freqIdx].replace(',', '.').trim();
+                        const freqVal = parseFloat(freqStr);
+                        if (!isNaN(freqVal) && freqVal >= 87.5 && freqVal <= 108.0) {
+                            const internalFreq = Math.round(freqVal * 100);
+                            const name = cols[nameIdx].trim();
+                            if (!name) continue;
+
+                            let tags = "imported";
+                            const ptyIdx = headers.findIndex(h => h === 'pty' || h.includes('genre'));
+                            if (ptyIdx !== -1 && cols[ptyIdx]) {
+                                tags = cols[ptyIdx].trim();
+                                const t = tags.toLowerCase();
+                                if (t) allTags.set(t, (allTags.get(t) || 0) + 1);
+                            } else {
+                                allTags.set("imported", (allTags.get("imported") || 0) + 1);
+                            }
+
+                            if (!fmStationMap.has(internalFreq)) fmStationMap.set(internalFreq, []);
+                            fmStationMap.get(internalFreq).push({
+                                name: name,
+                                tags: tags,
+                                country: "CSV",
+                                countrycode: "CSV",
+                                state: "",
+                                votes: 100
+                            });
+                            added++;
+                        }
+                    }
+                }
+
+                const sortedTags = [...allTags.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30);
+                const gs = document.getElementById('genreSelect');
+                gs.innerHTML = '<option value="">All Genres</option>';
+                for (const [tag, count] of sortedTags) {
+                    const o = document.createElement('option'); o.value = tag;
+                    o.textContent = tag.charAt(0).toUpperCase() + tag.slice(1) + ` (${count})`; gs.appendChild(o);
+                }
+                const pc = document.getElementById('tagPills'); pc.innerHTML = '';
+                for (const [tag] of sortedTags.slice(0, 15)) {
+                    const p = document.createElement('span'); p.className = 'tag-pill'; p.textContent = tag;
+                    p.onclick = () => toggleTagFilter(tag, p); pc.appendChild(p);
+                }
+
+                applyGenreFilter();
+                document.getElementById('stationCount').innerText = `${added} CSV stations loaded`;
+
+                const btn = document.getElementById('geoBtn');
+                btn.innerText = `📍 CSV DB LOADED`;
+                btn.style.color = 'var(--accent)'; btn.style.borderColor = 'var(--accent)';
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function loadDefaultStations() {
+            if (typeof defaultStationsData === 'undefined') {
+                alert("Default stations database file (stations_db.js) not found or removed.");
+                return;
+            }
+
+            const lines = defaultStationsData.split(/\r?\n/);
+            if (lines.length < 2) return;
+
+            const sep = lines[0].includes(';') ? ';' : ',';
+            const headers = lines[0].toLowerCase().split(sep).map(h => h.trim());
+
+            let freqIdx = headers.findIndex(h => h.includes('mhz') || h.includes('freq'));
+            let nameIdx = headers.findIndex(h => h.includes('program') || h.includes('name') || h.includes('station'));
+            if (freqIdx === -1) freqIdx = 0;
+            if (nameIdx === -1) nameIdx = 4;
+
+            fmStationMap.clear();
+            allStations = [];
+            const allTags = new Map();
+
+            let added = 0;
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                let cols = lines[i].split(sep);
+                if (cols.length > Math.max(freqIdx, nameIdx)) {
+                    const freqStr = cols[freqIdx].replace(',', '.').trim();
+                    const freqVal = parseFloat(freqStr);
+                    if (!isNaN(freqVal) && freqVal >= 87.5 && freqVal <= 108.0) {
+                        const internalFreq = Math.round(freqVal * 100);
+                        const name = cols[nameIdx].trim();
+                        if (!name) continue;
+
+                        let tags = "imported";
+                        const ptyIdx = headers.findIndex(h => h === 'pty' || h.includes('genre'));
+                        if (ptyIdx !== -1 && cols[ptyIdx]) {
+                            tags = cols[ptyIdx].trim();
+                            const t = tags.toLowerCase();
+                            if (t) allTags.set(t, (allTags.get(t) || 0) + 1);
+                        } else {
+                            allTags.set("imported", (allTags.get("imported") || 0) + 1);
+                        }
+
+                        if (!fmStationMap.has(internalFreq)) fmStationMap.set(internalFreq, []);
+                        fmStationMap.get(internalFreq).push({
+                            name: name,
+                            tags: tags,
+                            country: "CSV",
+                            countrycode: "CSV",
+                            state: "",
+                            votes: 100
+                        });
+                        added++;
+                    }
+                }
+            }
+
+            const sortedTags = [...allTags.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30);
+            const gs = document.getElementById('genreSelect');
+            gs.innerHTML = '<option value="">All Genres</option>';
+            for (const [tag, count] of sortedTags) {
+                const o = document.createElement('option'); o.value = tag;
+                o.textContent = tag.charAt(0).toUpperCase() + tag.slice(1) + ` (${count})`; gs.appendChild(o);
+            }
+            const pc = document.getElementById('tagPills'); pc.innerHTML = '';
+            for (const [tag] of sortedTags.slice(0, 15)) {
+                const p = document.createElement('span'); p.className = 'tag-pill'; p.textContent = tag;
+                p.onclick = () => toggleTagFilter(tag, p); pc.appendChild(p);
+            }
+
+            applyGenreFilter();
+            document.getElementById('stationCount').innerText = `${added} default stations loaded`;
+            const btn = document.getElementById('geoBtn');
+            btn.innerText = `📍 DEFAULT DB LOADED`;
+            btn.style.color = 'var(--accent)'; btn.style.borderColor = 'var(--accent)';
+            localStorage.setItem('radio_use_default_db', 'true');
+        }
+
+        (function () {
+            if (localStorage.getItem('radio_use_default_db') === 'true') {
+                if (typeof defaultStationsData !== 'undefined') {
+                    loadDefaultStations();
+                    return;
+                }
+            }
+            const saved = localStorage.getItem('radio_geo_countries');
+            if (saved) {
+                try {
+                    const countries = JSON.parse(saved);
+                    loadStationsForCountries(countries);
+                    const b = document.getElementById('geoBtn');
+                    b.innerText = `📍 ${countries.join(' + ')}`;
+                    b.style.color = 'var(--accent)'; b.style.borderColor = 'var(--accent)';
+                } catch (e) { console.error("Restore geo failed:", e); }
+            }
+        })();
+
+        // --- AUDIO VISUALIZER & MONITOR ENGINE ---
+        let audioContext = null;
+        let analyzer = null;
+        let dataArray = null;
+        let source = null;
+        let gainNode = null;
+        let isListening = false;
+        let currentAudioDeviceId = localStorage.getItem('web_audio_device_id') || '';
+
+        async function initAudio(deviceId = null) {
+            if (audioContext && !deviceId) return true;
+
+            if (audioContext && deviceId) {
+                if (source) source.disconnect();
+            }
+
+            try {
+                const constraints = {
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false,
+                        channelCount: 2,
+                        ...(deviceId ? { deviceId: { exact: deviceId } } : {})
+                    }
+                };
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        latencyHint: 'interactive',
+                        sampleRate: 48000
+                    });
+                }
+
+                if (!analyzer) {
+                    analyzer = audioContext.createAnalyser();
+                    analyzer.fftSize = 1024;
+                    analyzer.smoothingTimeConstant = 0.85;
+                }
+
+                if (!gainNode) {
+                    gainNode = audioContext.createGain();
+                    gainNode.gain.value = isListening ? 1.0 : 0.0;
+                }
+
+                source = audioContext.createMediaStreamSource(stream);
+
+                source.connect(analyzer);
+                analyzer.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                const bufferLength = analyzer.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+
+                const canvas = document.getElementById('headerVisualizer');
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = canvas.offsetWidth * dpr;
+                canvas.height = canvas.offsetHeight * dpr;
+
+                requestAnimationFrame(drawVisualizer);
+
+                if (deviceId) {
+                    currentAudioDeviceId = deviceId;
+                    localStorage.setItem('web_audio_device_id', deviceId);
+                }
+
+                return true;
+            } catch (err) {
+                console.error("Audio init failed:", err);
+                if (deviceId) {
+                    alert("Could not switch to selected audio device. It might be in use or disconnected.");
+                }
+                return false;
+            }
+        }
+
+        function toggleListen() {
+            if (!audioContext) {
+                initAudio(currentAudioDeviceId).then(() => {
+                    if (audioContext) executeToggleListen();
+                });
+                return;
+            }
+            executeToggleListen();
+        }
+
+        function executeToggleListen() {
+            isListening = !isListening;
+
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            if (gainNode) {
+                gainNode.gain.setTargetAtTime(isListening ? 1.0 : 0.0, audioContext.currentTime, 0.05);
+            }
+
+            const btn = document.getElementById('listenBtn');
+            if (isListening) {
+                btn.innerText = "LISTEN ON";
+                btn.style.color = "var(--accent)";
+                btn.style.borderColor = "var(--accent)";
+            } else {
+                btn.innerText = "LISTEN OFF";
+                btn.style.color = "#fff";
+                btn.style.borderColor = "#333";
+            }
+        }
+
+        async function refreshAudioDevices() {
+            try {
+                await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+                });
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const audioInputs = devices.filter(device => device.kind === 'audioinput');
+
+                const select = document.getElementById('set_audioDevice');
+                if (!select) return;
+
+                select.innerHTML = '<option value="">Default System Input</option>';
+                audioInputs.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Microphone ${select.length}`;
+                    if (device.deviceId === currentAudioDeviceId) option.selected = true;
+                    select.appendChild(option);
+                });
+            } catch (e) {
+                console.error("Error listing audio devices:", e);
+            }
+        }
+
+        async function updateAudioDevice(id) {
+            currentAudioDeviceId = id;
+            await initAudio(id);
+        }
+
+        function drawVisualizer() {
+            const canvas = document.getElementById('headerVisualizer');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width, h = canvas.height;
+
+            requestAnimationFrame(drawVisualizer);
+            if (!analyzer || !dataArray) return;
+
+            analyzer.getByteFrequencyData(dataArray);
+            ctx.clearRect(0, 0, w, h);
+
+            const barCount = 60;
+            const barWidth = (w / barCount);
+            const gap = 2;
+
+            for (let i = 0; i < barCount; i++) {
+                const logIndex = Math.floor(Math.pow(i / barCount, 1.8) * dataArray.length * 0.6);
+                const value = dataArray[logIndex] || 0;
+                const barHeight = (value / 255) * h;
+                const x = i * (barWidth + gap);
+
+                const grad = ctx.createLinearGradient(0, h, 0, h - barHeight);
+                grad.addColorStop(0, 'rgba(0, 255, 170, 0.1)');
+                grad.addColorStop(1, 'rgba(0, 255, 170, 0.8)');
+
+                ctx.fillStyle = grad;
+                ctx.fillRect(x, h - barHeight, barWidth, barHeight);
+
+                if (barHeight > 3) {
+                    ctx.fillStyle = '#00ffaa';
+                    ctx.fillRect(x, h - barHeight, barWidth, 1.5);
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>
