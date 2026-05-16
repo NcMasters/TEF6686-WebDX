@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <title>TEF6686 DX ANALYZER PRO</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="description" content="Professional spectrum analyzer for TEF6686 radio">
     <style>
         :root {
@@ -13,6 +14,13 @@
             --text: #e0e0e0;
             --dim: #555;
             --warn: #ffcc00;
+            --error: #ff4444;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.1); }
+            100% { opacity: 1; transform: scale(1); }
         }
 
         body {
@@ -108,9 +116,20 @@
         .dash-item {
             background: #080808;
             border: 1px solid #1a1a1a;
-            padding: 10px;
+            padding: 12px 8px;
             border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             text-align: center;
+            min-height: 60px;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+
+        .dash-item:hover {
+            border-color: #333;
         }
 
         .d-label {
@@ -124,9 +143,24 @@
         .d-val {
             font-size: 16px;
             font-weight: bold;
-            font-family: monospace;
+            font-family: 'Consolas', monospace;
             color: var(--accent);
             font-variant-numeric: tabular-nums;
+            display: flex;
+            align-items: baseline;
+            gap: 2px;
+            justify-content: center;
+            width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .dash-item small {
+            font-size: 9px;
+            color: var(--dim);
+            margin-left: 2px;
+            font-weight: normal;
         }
 
         #stereoVal {
@@ -543,8 +577,129 @@
         .tut-skip-link:hover {
             color: var(--accent);
         }
+
+        /* --- MOBILE OPTIMIZATIONS --- */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+                overflow-y: auto;
+            }
+
+            .layout {
+                grid-template-columns: 1fr;
+                height: auto;
+                gap: 10px;
+            }
+
+            .card {
+                padding: 15px;
+                height: auto;
+            }
+
+            .freq-readout h1 {
+                font-size: 48px;
+                letter-spacing: -2px;
+            }
+
+            .header-row {
+                flex-direction: column;
+                gap: 15px;
+                align-items: stretch;
+            }
+
+            .freq-readout {
+                text-align: center;
+            }
+
+            .rds-container {
+                width: 100%;
+            }
+
+            .dash-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+
+            .control-bar {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+
+            .control-bar .btn, .control-bar .tune-box {
+                width: 100%;
+                margin: 0;
+            }
+
+            .tune-box {
+                grid-column: span 2;
+                order: -1;
+                height: 50px;
+            }
+
+            .tune-box input {
+                flex: 1;
+                font-size: 20px;
+            }
+
+            #wifiIpInput {
+                grid-column: span 2;
+            }
+
+            .analyzer-frame {
+                height: 250px;
+                min-height: 250px;
+            }
+
+            /* Simplified Discovery Panel */
+            .discovery-controls {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+
+            .log-area {
+                height: 200px;
+                max-height: 200px;
+            }
+            
+            #modeBtn { order: 10; height: 50px; font-size: 14px; }
+            #connBtn { order: 11; height: 50px; font-size: 14px; }
+            
+            .btn {
+                padding: 12px 10px;
+                font-size: 14px;
+            }
+
+            .analyzer-frame {
+                height: 350px !important;
+                min-height: 350px !important;
+            }
+
+            .rds-ps {
+                font-size: 28px;
+                padding: 12px;
+            }
+        }
+
+        /* Recording state */
+        .recording-active {
+            animation: record-pulse 2s infinite !important;
+            background: #441111 !important;
+            border-color: #ff4444 !important;
+            color: #ff4444 !important;
+        }
+
+        @keyframes record-pulse {
+            0% { box-shadow: 0 0 0px rgba(255, 68, 68, 0); }
+            50% { box-shadow: 0 0 15px rgba(255, 68, 68, 0.4); }
+            100% { box-shadow: 0 0 0px rgba(255, 68, 68, 0); }
+        }
     </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="stations_db.js"></script>
+    <script src="map_stations.js"></script>
+    <audio id="liveAudioEl" style="display:none;" crossorigin="anonymous"></audio>
 </head>
 
 <body>
@@ -580,10 +735,21 @@
     <div class="layout">
         <div class="card">
             <div class="header-row">
-                <div class="freq-readout" style="min-width: 140px;">
-                    <h1 id="fMain" style="margin:0; font-size: 38px; letter-spacing: -1px;">00.00</h1><span class="unit"
-                        id="uMain">MHz</span>
+               <div class="freq-readout">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <h1 id="fMain" style="margin:0; font-size: 38px; letter-spacing: -1px;">00.00</h1>
+                    <span class="unit" id="uMain">MHz</span>
+                    <div id="audioStreamContainer" style="display: none; align-items: center; gap: 10px; background: #111; padding: 5px 15px; border-radius: 20px; border: 1px solid #333; margin-left: 10px;">
+                        <span id="liveIndicator" style="width: 8px; height: 8px; background: #ff4444; border-radius: 50%; box-shadow: 0 0 8px #ff4444; animation: pulse 1.5s infinite;"></span>
+                        <span style="font-size: 10px; font-weight: bold; color: #888; text-transform: uppercase; letter-spacing: 1px;">Live Audio</span>
+                        <input type="range" id="streamVol" min="0" max="1" step="0.01" value="0.8" style="width: 60px; height: 4px; cursor: pointer;">
+                        <button class="btn" id="stopStreamBtn" style="padding: 2px 8px; font-size: 10px; background: #222;">STOP</button>
+                    </div>
+                    <button class="btn" id="startStreamBtn" title="Listen to live audio from PC" style="padding: 5px 12px; border-radius: 20px; background: #1a1a1a; border: 1px solid #333; font-size: 11px; display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 14px;">🔊</span> Listen Live
+                    </button>
                 </div>
+            </div>
                 <div
                     style="flex:1; margin: 0 30px; height: 55px; position:relative; overflow:hidden; border-radius:4px; background: rgba(0,0,0,0.3);">
                     <canvas id="headerVisualizer" style="width:100%; height:100%;"></canvas>
@@ -616,24 +782,24 @@
                 <div class="dash-item" id="dash_audio" title="Stereo status and dynamic separation blend (0-100%)"><span
                         class="d-label">Audio</span><span class="d-val" id="stereoVal">--</span></div>
                 <div class="dash-item" title="Audio volume level in decibels"><span class="d-label">Volume</span><span
-                        class="d-val" id="volVal">--</span><small>dB</small></div>
+                        class="d-val"><span id="volVal">--</span><small>dB</small></span></div>
                 <div class="dash-item" title="Received Signal Strength Indicator (signal power)"><span
-                        class="d-label">RSSI</span><span class="d-val" id="sigVal">0.0</span><small>dBµV</small></div>
+                        class="d-label">RSSI</span><span class="d-val"><span id="sigVal">0.0</span><small>dBµV</small></span></div>
                 <div class="dash-item" title="Frequency offset from the tuned center"><span
-                        class="d-label">Offset</span><span class="d-val" id="offVal">0.0</span><small>kHz</small></div>
+                        class="d-label">Offset</span><span class="d-val"><span id="offVal">0.0</span><small>kHz</small></span></div>
                 <div class="dash-item" title="Signal-to-Noise Ratio (signal purity)"><span
-                        class="d-label">SNR</span><span class="d-val" id="snrVal">--</span><small>dB</small></div>
+                        class="d-label">SNR</span><span class="d-val"><span id="snrVal">--</span><small>dB</small></span></div>
                 <div class="dash-item" title="Intermediate Frequency Bandwidth or Quality Indicator"><span
-                        class="d-label" id="bwLabel">IF BW</span><span class="d-val" id="bwVal">--</span><small
-                        id="bwUnit">kHz</small></div>
+                        class="d-label" id="bwLabel">IF BW</span><span class="d-val"><span id="bwVal">--</span><small
+                        id="bwUnit">kHz</small></span></div>
                 <div class="dash-item" id="dash_usn" title="Ultrasonic Noise (multipath/interference indicator)"><span
-                        class="d-label">USN</span><span class="d-val" id="usnVal">0.0</span><small>%</small></div>
+                        class="d-label">USN</span><span class="d-val"><span id="usnVal">0.0</span><small>%</small></span></div>
                 <div class="dash-item" id="dash_wam" title="Wideband Amplitude Modulation (multipath indicator)"><span
-                        class="d-label">WAM</span><span class="d-val" id="wamVal">0.0</span><small>%</small></div>
+                        class="d-label">WAM</span><span class="d-val"><span id="wamVal">0.0</span><small>%</small></span></div>
                 <div class="dash-item" title="Modulation level (audio loudness)"><span class="d-label">Mod</span><span
-                        class="d-val" id="modVal">0.0</span><small>%</small></div>
+                        class="d-val"><span id="modVal">0.0</span><small>%</small></span></div>
                 <div class="dash-item" title="Calculated tuning stability based on frequency offset"><span
-                        class="d-label">Stability</span><span class="d-val" id="stabVal">0</span><small>%</small></div>
+                        class="d-label">Stability</span><span class="d-val"><span id="stabVal">0</span><small>%</small></span></div>
             </div>
 
             <div class="rds-panel" id="rdsPanel"
@@ -700,6 +866,8 @@
                     title="Hardware audio mute toggle">MUTE</button>
                 <button class="btn btn-status" id="listenBtn" onclick="toggleListen()" style="min-width: 80px"
                     title="Play radio audio through browser speakers (Web Monitor)">LISTEN OFF</button>
+                <button class="btn btn-status" id="recordBtn" onclick="toggleRecording()" style="min-width: 80px; display: none;"
+                    title="Record live audio to 128kbps Opus file">RECORD</button>
 
                 <div
                     style="display:flex; align-items:center; background:#111; border:1px solid #333; border-radius:4px; padding:0 8px; margin:0 4px;">
@@ -723,14 +891,26 @@
         <div class="card">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
                 <span class="d-label" style="margin:0">Spectrum Sweep Control</span>
-                <button class="btn btn-status" id="sqToggle" onclick="toggleSquelch()"
-                    style="padding:2px 8px; font-weight:bold;"
-                    title="Toggle signal threshold for spectrum labels and audio">SQUELCH OFF</button>
+                <div style="display:flex; gap:10px">
+                    <button class="btn btn-status" id="smartI2CBtn" onclick="toggleSmartI2C()"
+                        style="padding:2px 8px; font-weight:bold;"
+                        title="Update I2C only every 5 seconds (Slow mode)">SLOW I2C</button>
+                    <button class="btn btn-status" id="sqToggle" onclick="toggleSquelch()"
+                        style="padding:2px 8px; font-weight:bold;"
+                        title="Toggle signal threshold for spectrum labels and audio">SQUELCH OFF</button>
+                </div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:15px">
-                <button class="btn btn-active" id="bandFM" onclick="switchBand(1)">FM BAND</button>
-                <button class="btn" id="bandMW" onclick="switchBand(2)">MEDIUMWAVE</button>
-                <button class="btn" id="bandSW" onclick="switchBand(3)">SHORTWAVE</button>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:15px">
+                <button class="btn btn-active" id="bandFM" onclick="switchBand(1)" style="padding:0">FM BAND</button>
+                <button class="btn" id="bandMW" onclick="switchBand(2)" style="padding:0">MW</button>
+                <button class="btn" id="bandSW" onclick="switchBand(3)" style="padding:0">SW</button>
+                <button class="btn" id="bandFull" onclick="switchBand(4)" title="Custom full spectrum scan" style="padding:0">CUSTOM</button>
+            </div>
+            <div id="customScanConfig" style="display:none; grid-template-columns: 1fr 1.2fr 1.2fr 1fr; gap: 5px; margin-bottom: 15px;">
+                <select id="customMode" class="search-input" style="padding:4px"><option value="A">AM</option><option value="F">FM</option></select>
+                <input type="number" id="customStart" value="144" class="search-input" placeholder="Start" title="Start Frequency (kHz or 10kHz)" />
+                <input type="number" id="customEnd" value="27000" class="search-input" placeholder="End" title="End Frequency (kHz or 10kHz)" />
+                <input type="number" id="customStep" value="9" class="search-input" placeholder="Step" title="Scan Step" />
             </div>
             <button class="btn" id="scanS" onclick="toggleScan('S')" style="height:50px;margin-bottom:10px;width:100%"
                 title="Slow, high-resolution spectrum sweep">ACCURATE ANALYZE</button>
@@ -741,6 +921,9 @@
                 style="height:45px;margin-bottom:15px;width:100%"
                 title="Maximize RDS sensitivity for weak signals (Mono + Fixed 56k BW + Statistical Decoder)">⚡
                 ULTRA-RDS DX MODE</button>
+            <button class="btn" id="dxMapBtn" onclick="toggleDXMap()"
+                style="height:45px;margin-bottom:15px;width:100%;background:rgba(0,100,255,0.05);border-color:var(--accent);color:var(--accent);font-weight:bold;letter-spacing:1px"
+                title="Open the interactive DX Station Map with click-to-tune and map scanning">📡 DX STATION MAP</button>
             <div style="font-size:9px; color:var(--dim); text-align:right; margin-top:5px; opacity:0.4;">v2.5-DX-PRO
             </div>
 
@@ -750,7 +933,7 @@
                     <span class="station-count" id="stationCount">No stations loaded</span>
                 </div>
                 <button class="btn" id="geoBtn" onclick="loadStationsByLocation()"
-                    style="width:100%;margin-bottom:8px;background:#002244;border-color:#4488ff;color:#4488ff">📍 USE MY
+                    style="width:100%;margin-bottom:8px;background:rgba(68,136,255,0.05);border-color:var(--accent);color:var(--accent)">📍 USE MY
                     LOCATION</button>
                 <div style="display:flex;gap:8px;margin-bottom:8px">
                     <button class="btn" onclick="document.getElementById('csvUpload').click()"
@@ -831,6 +1014,54 @@
         </div>
     </div>
 
+    <!-- DX MAP OVERLAY -->
+    <div id="dxMapOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:9998; background:#000;">
+        <div style="display:flex; width:100%; height:100%;">
+            <!-- Map Sidebar -->
+            <div id="mapSidebar" style="width:380px; background:#0a0a0f; border-right:1px solid #222; display:flex; flex-direction:column; z-index:2;">
+                <div style="padding:15px 20px; background:#111; border-bottom:1px solid #222; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <div style="font-size:1.3em; font-weight:800; color:#00ccff;">DX Station Map</div>
+                        <div style="font-size:.7em; color:#555; margin-top:2px;">Click a station to tune your TEF6686</div>
+                    </div>
+                    <button class="btn" onclick="toggleDXMap()" style="padding:6px 14px; font-size:12px; border-color:#555;">✕ CLOSE</button>
+                </div>
+                <div style="padding:12px 20px; background:#0f0f15; border-bottom:1px solid #222;">
+                    <div style="display:flex; gap:8px; margin-bottom:10px;">
+                        <div style="flex:1;"><label style="font-size:.6em; color:#555; text-transform:uppercase;">Lat</label><input type="number" id="mapLat" value="55.6760" step="0.001" style="width:100%;padding:7px;background:#111;border:1px solid #333;color:white;border-radius:4px;font-family:monospace;"></div>
+                        <div style="flex:1;"><label style="font-size:.6em; color:#555; text-transform:uppercase;">Lon</label><input type="number" id="mapLon" value="12.5680" step="0.001" style="width:100%;padding:7px;background:#111;border:1px solid #333;color:white;border-radius:4px;font-family:monospace;"></div>
+                    </div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                        <label style="font-size:.75em;color:#888;cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="mapFill" checked> Fill</label>
+                        <label style="font-size:.75em;color:#888;cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="mapCircles" checked> Circles</label>
+                        <span style="width:1px;height:16px;background:#333;"></span>
+                        <span style="font-size:.6em;color:#555;">SORT</span>
+                        <button class="btn" data-msort="dist" style="padding:3px 8px;font-size:.68em;background:#00ccff;color:#000;border-color:#00ccff;">DIST</button>
+                        <button class="btn" data-msort="freq" style="padding:3px 8px;font-size:.68em;">FREQ</button>
+                        <button class="btn" data-msort="power" style="padding:3px 8px;font-size:.68em;">PWR</button>
+                    </div>
+                    <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
+                        <span style="font-size:.6em;color:#555;">SHOW</span>
+                        <button class="btn" data-mcountry="all" style="padding:3px 8px;font-size:.68em;background:#ff3366;color:#000;border-color:#ff3366;">ALL</button>
+                        <button class="btn" data-mcountry="DNK" style="padding:3px 8px;font-size:.68em;">DNK</button>
+                        <button class="btn" data-mcountry="D" style="padding:3px 8px;font-size:.68em;">D</button>
+                        <button class="btn" data-mcountry="S" style="padding:3px 8px;font-size:.68em;">S</button>
+                    </div>
+                </div>
+                <div style="padding:8px 20px; border-bottom:1px solid #222; display:flex; justify-content:space-between; font-size:.72em; color:#555; font-family:monospace;">
+                    <span id="mapStatCount">0 receivable</span>
+                    <span id="mapStatRange">—</span>
+                </div>
+                <div style="padding:8px 20px; border-bottom:1px solid #222;">
+                    <button class="btn" id="mapScanBtn" onclick="startMapScan()" style="width:100%;height:36px;font-size:11px;background:#002211;border-color:#00ffaa;color:#00ffaa;" title="Auto-scan all map stations to check real reception">📡 SCAN MAP STATIONS</button>
+                </div>
+                <div id="mapList" style="flex:1; overflow-y:auto; padding:8px;"></div>
+            </div>
+            <!-- Map Container -->
+            <div id="dxMapContainer" style="flex:1; height:100%;"></div>
+        </div>
+    </div>
+
     <div id="advModal" onclick="if(event.target === this) closeAdvanced()"
         style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center; backdrop-filter: blur(4px);">
         <div
@@ -845,6 +1076,34 @@
                     <button onclick="closeAdvanced()" 
                         style="background:none; border:none; color:var(--dim); font-size:24px; cursor:pointer; line-height:1; padding:0 5px; transition:color 0.2s;"
                         onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--dim)'">×</button>
+                </div>
+            </div>
+
+            <div id="section_theme"
+                style="background: #080808; border:1px solid #222; padding:15px; border-radius:6px; border-left: 3px solid var(--accent);">
+                <h4
+                    style="margin:0 0 12px 0; color:var(--accent); font-size:11px; text-transform:uppercase; letter-spacing: 0.5px;">
+                    Theme & Appearance</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:12px;">
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <label style="font-size:10px; color:var(--dim);">UI THEME</label>
+                        <select id="set_theme" class="filter-select" onchange="applyThemePreset(this.value)">
+                            <option value="classic">Classic DX (Green)</option>
+                            <option value="deepsea">Deep Sea (Blue)</option>
+                            <option value="amber">Amber Glow (Orange)</option>
+                            <option value="vampire">Vampire (Red)</option>
+                            <option value="cyberpunk">Cyberpunk (Pink)</option>
+                            <option value="custom">Custom Color...</option>
+                        </select>
+                    </div>
+                    <div id="customAccentWrap" style="display:none; flex-direction:column; gap:5px;">
+                        <label style="font-size:10px; color:var(--dim);">ACCENT COLOR</label>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="color" id="set_accent" value="#00ffaa" 
+                                style="width:100%; height:32px; background:transparent; border:none; cursor:pointer;"
+                                oninput="updateAccent(this.value)">
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -876,11 +1135,6 @@
                         after scan
                     </label>
                     <label style="display:flex; align-items:center; gap:10px; font-size:12px; cursor:pointer;">
-                        <input type="checkbox" id="set_smartI2C" checked
-                            style="width:16px; height:16px; accent-color:var(--warn);"> Smart I2C (Auto-off on weak
-                        signals / Mono)
-                    </label>
-                    <label style="display:flex; align-items:center; gap:10px; font-size:12px; cursor:pointer;">
                         <input type="checkbox" id="set_nb" checked
                             style="width:16px; height:16px; accent-color:var(--accent);"> Noise Blanker (Global Pulse
                         Suppression)
@@ -893,6 +1147,20 @@
                 <h4
                     style="margin:0 0 12px 0; color:#4488ff; font-size:11px; text-transform:uppercase; letter-spacing: 0.5px;">
                     WiFi & Location Settings</h4>
+                <div
+                    style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:12px; border-bottom:1px solid #1a1a1a; padding-bottom:12px;">
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <label style="font-size:10px; color:var(--dim);">WIFI OPERATION MODE</label>
+                        <select id="set_wifiMode" class="filter-select" style="background:#000; color:var(--accent); font-weight:bold;">
+                            <option value="1">HOME NETWORK (STA)</option>
+                            <option value="2">OFFLINE HOTSPOT (AP)</option>
+                            <option value="0">WIFI OFF (ULTRA DX)</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:5px; justify-content:center;">
+                        <p style="margin:0; font-size:9px; color:#888;"><b>STA:</b> Connects to your router.<br><b>AP:</b> Radio becomes its own Hotspot.</p>
+                    </div>
+                </div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:12px;">
                     <div style="display:flex; flex-direction:column; gap:5px;">
                         <label style="font-size:10px; color:var(--dim);">WIFI SSID</label>
@@ -903,6 +1171,16 @@
                         <label style="font-size:10px; color:var(--dim);">WIFI PASSWORD</label>
                         <input type="password" id="set_pass" placeholder="Leave blank to keep current"
                             style="background:#000; border:1px solid #333; color:#fff; padding:8px; border-radius:4px; outline:none; font-family:monospace; font-size:12px;">
+                    </div>
+                </div>
+                <div id="wifiStatusInfo" style="margin-bottom:12px; font-family:monospace; font-size:10px; background:rgba(68,136,255,0.1); padding:8px; border-radius:4px; display:none;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                        <span style="color:#aaa;">Status:</span>
+                        <b id="wifiStatusVal" style="color:#4488ff;">UNKNOWN</b>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:#aaa;">Local IP:</span>
+                        <b id="wifiIpVal" style="color:#4488ff;">0.0.0.0</b>
                     </div>
                 </div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
@@ -918,6 +1196,12 @@
                     </div>
                 </div>
                 <p style="margin:8px 0 0 0; font-size:9px; color:var(--dim);">Leave coordinates at 0.0 to use browser auto-detection (currently: <span id="autoLocLabel">Searching...</span>).</p>
+                <div style="margin-top:15px; border-top:1px solid #222; padding-top:15px;">
+                    <button class="btn" onclick="killWiFi()" 
+                        style="width:100%; background:#441111; border-color:#882222; color:#ff6666; font-weight:bold; height:45px;"
+                        title="Completely disables WiFi to eliminate RFI noise. RE-ENABLE REQUIRES USB!">KILL WIFI (ULTRA DX MODE)</button>
+                    <p style="font-size:9px; color:var(--dim); margin-top:8px; text-align:center;">WARNING: Disables web interface immediately. Must connect via USB and send 'w1' to re-enable.</p>
+                </div>
             </div>
 
             <div
@@ -938,86 +1222,66 @@
                     </div>
                     <small style="font-size:9px; color:var(--dim); margin-top:2px;">Click 'LOAD' to grant microphone
                         permission and list available cards.</small>
+                    <div style="margin-top:10px; padding-top:10px; border-top:1px solid #222;">
+                        <label style="font-size:10px; color:var(--dim); display:block; margin-bottom:5px;">REMOTE AUDIO SERVER IP (PC IP)</label>
+                        <input type="text" id="set_audio_ip" placeholder="e.g. 192.168.1.100" 
+                            style="background:#000; border:1px solid #333; color:var(--accent); padding:8px; border-radius:4px; outline:none; font-family:monospace; font-size:12px; width:100%;">
+                        <small style="font-size:9px; color:var(--dim); display:block; margin-top:5px;">Enter your PC's IP address if 'Listen Live' fails on your phone.</small>
+                    </div>
                 </div>
             </div>
 
-            <div id="section_fm"
-                style="background: #080808; border:1px solid #222; padding:15px; border-radius:6px; border-left: 3px solid #00ffaa; transition: opacity 0.3s;">
-                <h4
-                    style="margin:0 0 12px 0; color:#00ffaa; font-size:11px; text-transform:uppercase; letter-spacing: 0.5px;">
-                    FM DX Engine (Module 32)</h4>
-                <div class="filter-row" style="margin-bottom:12px">
-                    <label style="min-width:110px; font-size:10px; color:var(--dim);">Multipath (IMS)</label>
-                    <select class="filter-select" id="set_ims">
-                        <option value="0">Disabled</option>
-                        <option value="1">Enabled (Multipath Mitigation)</option>
-                    </select>
-                </div>
-                <div class="filter-row" style="margin-bottom:12px">
-                    <label style="min-width:110px; font-size:10px; color:var(--dim);">De-emphasis</label>
-                    <select class="filter-select" id="set_deemph">
-                        <option value="500">50 µs (Europe/Asia)</option>
-                        <option value="750">75 µs (Americas)</option>
-                    </select>
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px">
-                    <label style="display:flex; align-items:center; gap:10px; font-size:11px; cursor:pointer">
-                        <input type="checkbox" id="set_eq" style="width:14px; height:14px;"> Channel EQ
-                    </label>
-                    <label style="display:flex; align-items:center; gap:10px; font-size:11px; cursor:pointer">
-                        <input type="checkbox" id="set_hc" style="width:14px; height:14px;"> Highcut Filter
-                    </label>
-                </div>
-            </div>
 
-            <div id="section_am"
-                style="background: #080808; border:1px solid #222; padding:15px; border-radius:6px; border-left: 3px solid #ffcc00; transition: opacity 0.3s;">
-                <h4
-                    style="margin:0 0 12px 0; color:#ffcc00; font-size:11px; text-transform:uppercase; letter-spacing: 0.5px;">
-                    AM/Shortwave Engine (Module 33)</h4>
 
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px">
-                    <div class="filter-row" style="margin:0">
-                        <label style="font-size:10px; color:var(--dim);">Antenna Atten.</label>
-                        <select class="filter-select" id="set_am_atten">
-                            <option value="0">0 dB (Max)</option>
-                            <option value="60">6 dB</option>
-                            <option value="120">12 dB</option>
-                            <option value="180">18 dB</option>
-                        </select>
+            <details id="section_am"
+                style="background: #080808; border:1px solid #222; padding:15px; border-radius:6px; border-left: 3px solid #ffcc00; transition: opacity 0.3s; margin-bottom:15px;">
+                <summary
+                    style="margin:0; color:#ffcc00; font-size:11px; text-transform:uppercase; letter-spacing: 0.5px; cursor:pointer; font-weight:bold; outline:none;">
+                    Advanced AM/Shortwave Engine</summary>
+                <div style="margin-top:15px;">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px">
+                        <div class="filter-row" style="margin:0">
+                            <label style="font-size:10px; color:var(--dim);">Antenna Atten.</label>
+                            <select class="filter-select" id="set_am_atten">
+                                <option value="0">0 dB (Max)</option>
+                                <option value="60">6 dB</option>
+                                <option value="120">12 dB</option>
+                                <option value="180">18 dB</option>
+                            </select>
+                        </div>
+                        <div class="filter-row" style="margin:0">
+                            <label style="font-size:10px; color:var(--dim);">Co-Channel Det.</label>
+                            <select class="filter-select" id="set_am_cochan">
+                                <option value="0">Off</option>
+                                <option value="1">On (Sharp)</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="filter-row" style="margin:0">
-                        <label style="font-size:10px; color:var(--dim);">Co-Channel Det.</label>
-                        <select class="filter-select" id="set_am_cochan">
-                            <option value="0">Off</option>
-                            <option value="1">On (Sharp)</option>
-                        </select>
+
+                    <div class="filter-row"
+                        style="margin-bottom:12px; flex-direction:column; align-items:flex-start; gap:5px">
+                        <div style="display:flex; justify-content:space-between; width:100%">
+                            <label style="font-size:10px; color:var(--dim);">RF AGC Start Level</label>
+                            <span id="agcVal" style="font-size:10px; color:var(--accent)">90 dBuV</span>
+                        </div>
+                        <input type="range" id="set_am_agc" min="500" max="1000" step="50" value="900"
+                            style="width:100%; height:4px; accent-color:#ffcc00;"
+                            oninput="document.getElementById('agcVal').innerText = (this.value/10) + ' dBuV'">
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px">
+                        <label style="display:flex; align-items:center; gap:8px; font-size:11px; cursor:pointer">
+                            <input type="checkbox" id="set_am_audio_nb" style="width:14px; height:14px;"> Audio NB
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; font-size:11px; cursor:pointer">
+                            <input type="checkbox" id="set_am_softmute" style="width:14px; height:14px;"> Softmute
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; font-size:11px; cursor:pointer">
+                            <input type="checkbox" id="set_lc" style="width:14px; height:14px;"> Lowcut Filter
+                        </label>
                     </div>
                 </div>
-
-                <div class="filter-row"
-                    style="margin-bottom:12px; flex-direction:column; align-items:flex-start; gap:5px">
-                    <div style="display:flex; justify-content:space-between; width:100%">
-                        <label style="font-size:10px; color:var(--dim);">RF AGC Start Level</label>
-                        <span id="agcVal" style="font-size:10px; color:var(--accent)">90 dBuV</span>
-                    </div>
-                    <input type="range" id="set_am_agc" min="500" max="1000" step="50" value="900"
-                        style="width:100%; height:4px; accent-color:#ffcc00;"
-                        oninput="document.getElementById('agcVal').innerText = (this.value/10) + ' dBuV'">
-                </div>
-
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px">
-                    <label style="display:flex; align-items:center; gap:8px; font-size:11px; cursor:pointer">
-                        <input type="checkbox" id="set_am_audio_nb" style="width:14px; height:14px;"> Audio NB
-                    </label>
-                    <label style="display:flex; align-items:center; gap:8px; font-size:11px; cursor:pointer">
-                        <input type="checkbox" id="set_am_softmute" style="width:14px; height:14px;"> Softmute
-                    </label>
-                    <label style="display:flex; align-items:center; gap:8px; font-size:11px; cursor:pointer">
-                        <input type="checkbox" id="set_lc" style="width:14px; height:14px;"> Lowcut Filter
-                    </label>
-                </div>
-            </div>
+            </details>
 
             <div style="background: #080808; border:1px solid #222; padding:15px; border-radius:6px;">
                 <h4 style="margin:0 0 8px 0; color:var(--accent); font-size:11px; text-transform:uppercase;">Startup
@@ -1052,61 +1316,32 @@
             </style>
 
             <div style="background: #080808; border:1px solid #222; padding:15px; border-radius:6px;">
-                <h4
-                    style="margin:0 0 12px 0; color:var(--accent); font-size:11px; text-transform:uppercase; letter-spacing: 0.5px;">
-                    DSP Audio & Signal Thresholds</h4>
-
-                <div style="margin-bottom:15px;">
-                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;">
-                        <span style="color:#aaa;">Softmute Threshold</span>
-                        <span id="val_softmute" style="color:var(--accent); font-weight:bold;">15 dBµV</span>
+                <h4 style="margin:0 0 12px 0; color:var(--accent); font-size:11px; text-transform:uppercase; letter-spacing: 0.5px;">
+                    DSP Audio Profiles & Enhancements</h4>
+                <div style="display:flex; flex-direction:column; gap:15px; margin-bottom:10px;">
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <label style="font-size:10px; color:var(--dim);">DSP AUDIO PROFILE</label>
+                        <select id="set_dspProfile" class="filter-select">
+                            <option value="auto">Auto (NXP Recommended Defaults)</option>
+                            <option value="dx">DX / Weak Signal (Aggressive suppression)</option>
+                            <option value="hifi">Hi-Fi / Local (Maximum fidelity)</option>
+                        </select>
+                        <p style="margin:2px 0 0 0; font-size:9px; color:var(--dim);">Adjusts Softmute, Stereo Blend, Highcut thresholds and slopes.</p>
                     </div>
-                    <input type="range" id="set_softmute" min="-10" max="40" value="15"
-                        oninput="document.getElementById('val_softmute').innerText = this.value + ' dBµV'"
-                        style="width:100%; accent-color:var(--accent); cursor:pointer;">
-                    <p style="margin:6px 0 0 0; font-size:9px; color:var(--dim);">Lower values allow hearing more noise.
-                        Higher values mute weak signals.</p>
-                </div>
-
-                <div style="margin-bottom:15px;">
-                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;">
-                        <span style="color:#aaa;">Stereo Blend Threshold</span>
-                        <span id="val_stereo" style="color:var(--accent); font-weight:bold;">30 dBµV</span>
-                    </div>
-                    <input type="range" id="set_stereo" min="10" max="60" value="30"
-                        oninput="document.getElementById('val_stereo').innerText = this.value + ' dBµV'"
-                        style="width:100%; accent-color:var(--accent); cursor:pointer;">
-                    <p style="margin:6px 0 0 0; font-size:9px; color:var(--dim);">Signals below this will gradually
-                        blend to mono for better SN ratio.</p>
-                </div>
-
-                <div>
-                    <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;">
-                        <span style="color:#aaa;">High Cut (Dynamic Treble)</span>
-                        <span id="val_highcut" style="color:var(--accent); font-weight:bold;">25 dBµV</span>
-                    </div>
-                    <input type="range" id="set_highcut" min="10" max="50" value="25"
-                        oninput="document.getElementById('val_highcut').innerText = this.value + ' dBµV'"
-                        style="width:100%; accent-color:var(--accent); cursor:pointer;">
-                    <p style="margin:6px 0 0 0; font-size:9px; color:var(--dim);">Reduces high frequencies on weak/noisy
-                        signals.</p>
-                </div>
-                <div style="margin-top:18px; padding-top:12px; border-top:1px solid #222;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <span style="color:#aaa; font-size:11px;">Auto DX DSP Engine</span>
-                        <label class="switch" style="width:34px; height:20px;">
-                            <input type="checkbox" id="set_autoDX">
-                            <span class="slider" style="border-radius:20px;"></span>
+                    <div style="display:grid; grid-template-columns: 1fr; gap:10px; margin-top:8px;">
+                        <label style="display:flex; align-items:center; gap:10px; font-size:12px; cursor:pointer; color:var(--text);">
+                            <input type="checkbox" id="set_mphSupp" checked style="width:16px; height:16px; accent-color:var(--accent);"> Multipath Suppression (iMS)
+                        </label>
+                        <label style="display:flex; align-items:center; gap:10px; font-size:12px; cursor:pointer; color:var(--text);">
+                            <input type="checkbox" id="set_channelEq" checked style="width:16px; height:16px; accent-color:var(--accent);"> Channel Equalizer
                         </label>
                     </div>
-                    <p style="margin:0; font-size:9px; color:var(--dim); line-height:1.3;">Automatically handles Channel
-                        EQ, Noise Blanker, High/Lowcut based on signal (Off if >50% Stereo).</p>
                 </div>
             </div>
 
             <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:10px; padding-top:20px; border-top:1px solid #222;">
                 <button class="btn" onclick="closeAdvanced()" style="background:transparent; border-color:#444;">CANCEL</button>
-                <button class="btn btn-active" onclick="saveAdvanced()" style="padding:10px 30px; box-shadow: 0 4px 15px rgba(0,255,170,0.2);">SAVE SETTINGS</button>
+                <button id="saveAdvBtn" class="btn btn-active" onclick="saveAdvanced()" style="padding:10px 30px; box-shadow: 0 4px 15px rgba(0,255,170,0.2);">SAVE SETTINGS</button>
             </div>
 
         </div>
@@ -1128,7 +1363,7 @@
                 <button class="btn btn-active" onclick="connectUSB()" style="height:60px; font-size:14px;">CONNECT VIA
                     USB SERIAL</button>
                 <div style="display:flex; gap:10px;">
-                    <input type="text" id="welcomeWifiIp" placeholder="tef6686.local"
+                    <input type="text" id="welcomeWifiIp" placeholder="tef6686.local" value="tef6686.local"
                         style="flex:1; background:#000; border:1px solid #333; border-radius:4px; color:#fff; padding:0 15px; font-family:monospace; font-size:14px; outline:none;">
                     <button class="btn" onclick="connectWelcomeWiFi()"
                         style="background:#002244; border-color:#4488ff; color:#4488ff; height:60px; min-width:140px;">WIFI
@@ -1183,6 +1418,14 @@
             </div>
         </div>
     </div>
+    <style>
+        /* DX Map popup overrides */
+        #dxMapOverlay .leaflet-container { background: #0b0b0f !important; }
+        #dxMapOverlay .custom-popup .leaflet-popup-content-wrapper { background:rgba(10,10,15,.95); color:#fff; border-radius:12px; border:1px solid #333; backdrop-filter:blur(12px); box-shadow:0 12px 48px rgba(0,0,0,.8); }
+        #dxMapOverlay .custom-popup .leaflet-popup-tip { background:rgba(10,10,15,.95); }
+        #dxMapOverlay .custom-popup .leaflet-popup-content { margin:14px 16px; }
+    </style>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         let port, isScanning = false, didDrag = false, renderRunning = false;
         // Spectrum storage for each band
@@ -1201,6 +1444,77 @@
         let manualLat = parseFloat(localStorage.getItem('radio_lat') || '0');
         let manualLon = parseFloat(localStorage.getItem('radio_lon') || '0');
         let autoPos = { lat: 0, lon: 0 };
+        let currentThemeAccent = '#00ffaa';
+
+        // --- THEME ENGINE ---
+        const THEME_PRESETS = {
+            classic: { bg: '#050505', surface: '#121212', accent: '#00ffaa' },
+            deepsea: { bg: '#000814', surface: '#001d3d', accent: '#00ccff' },
+            amber: { bg: '#0a0a05', surface: '#1a1a0a', accent: '#ffcc00' },
+            vampire: { bg: '#0a0000', surface: '#1a0505', accent: '#ff4444' },
+            cyberpunk: { bg: '#0a000a', surface: '#1a001a', accent: '#ff00ff' }
+        };
+
+        function applyThemePreset(preset) {
+            const customWrap = document.getElementById('customAccentWrap');
+            if (preset === 'custom') {
+                customWrap.style.display = 'flex';
+                const savedAccent = localStorage.getItem('theme_accent') || '#00ffaa';
+                updateAccent(savedAccent);
+                return;
+            }
+            customWrap.style.display = 'none';
+            const theme = THEME_PRESETS[preset];
+            if (theme) {
+                document.documentElement.style.setProperty('--bg', theme.bg);
+                document.documentElement.style.setProperty('--surface', theme.surface);
+                document.documentElement.style.setProperty('--accent', theme.accent);
+                localStorage.setItem('theme_preset', preset);
+                localStorage.setItem('theme_accent', theme.accent);
+                document.getElementById('set_accent').value = theme.accent;
+                currentThemeAccent = theme.accent;
+            }
+        }
+
+        function updateAccent(color) {
+            document.documentElement.style.setProperty('--accent', color);
+            localStorage.setItem('theme_accent', color);
+            localStorage.setItem('theme_preset', 'custom');
+            currentThemeAccent = color;
+        }
+
+        function loadTheme() {
+            const preset = localStorage.getItem('theme_preset') || 'classic';
+            const accent = localStorage.getItem('theme_accent');
+            
+            const select = document.getElementById('set_theme');
+            if (select) select.value = preset;
+
+            if (preset === 'custom' && accent) {
+                document.getElementById('customAccentWrap').style.display = 'flex';
+                document.getElementById('set_accent').value = accent;
+                document.documentElement.style.setProperty('--accent', accent);
+                currentThemeAccent = accent;
+            } else {
+                applyThemePreset(preset);
+            }
+        }
+        // Run theme load immediately
+        loadTheme();
+
+        function hexToRgba(hex, opacity) {
+            let r = 0, g = 0, b = 0;
+            if (hex.length == 4) {
+                r = parseInt(hex[1] + hex[1], 16);
+                g = parseInt(hex[2] + hex[2], 16);
+                b = parseInt(hex[3] + hex[3], 16);
+            } else if (hex.length == 7) {
+                r = parseInt(hex.substring(1, 3), 16);
+                g = parseInt(hex.substring(3, 5), 16);
+                b = parseInt(hex.substring(5, 7), 16);
+            }
+            return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+        }
 
         if (navigator.geolocation) {
             navigator.geolocation.watchPosition((pos) => {
@@ -1493,8 +1807,8 @@
         }
 
         function connectWelcomeWiFi() {
-            const ip = document.getElementById('welcomeWifiIp').value.trim();
-            if (ip) document.getElementById('wifiIpInput').value = ip;
+            const ip = document.getElementById('welcomeWifiIp').value.trim() || 'tef6686.local';
+            document.getElementById('wifiIpInput').value = ip;
             connectWiFi();
         }
 
@@ -1742,6 +2056,126 @@
             }
         }
         const rds = new RDSDecoder();
+
+        /* Audio Streaming Logic */
+        let audioStreamAbort = null;
+        let pcmAudioCtx = null;
+        let pcmGainNode = null;
+        const startStreamBtn = document.getElementById('startStreamBtn');
+        const stopStreamBtn = document.getElementById('stopStreamBtn');
+        const streamVol = document.getElementById('streamVol');
+        const audioStreamContainer = document.getElementById('audioStreamContainer');
+
+        async function playPCMStream(url) {
+            pcmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Unlock audio context for iOS/Safari
+            if (pcmAudioCtx.state === 'suspended') {
+                await pcmAudioCtx.resume();
+            }
+            const unlockBuffer = pcmAudioCtx.createBuffer(1, 1, 22050);
+            const unlockSource = pcmAudioCtx.createBufferSource();
+            unlockSource.buffer = unlockBuffer;
+            unlockSource.connect(pcmAudioCtx.destination);
+            if (unlockSource.start) unlockSource.start(0);
+            else if (unlockSource.noteOn) unlockSource.noteOn(0);
+
+            pcmGainNode = pcmAudioCtx.createGain();
+            pcmGainNode.gain.value = streamVol.value;
+            pcmGainNode.connect(pcmAudioCtx.destination);
+            
+            audioStreamAbort = new AbortController();
+            
+            try {
+                const response = await fetch(url, { signal: audioStreamAbort.signal });
+                if (!response.body) throw new Error("ReadableStream not supported");
+                
+                const reader = response.body.getReader();
+                let nextTime = pcmAudioCtx.currentTime + 0.1;
+                
+                startStreamBtn.style.display = 'none';
+                audioStreamContainer.style.display = 'flex';
+                showToast("Live Audio Connected (Low Latency PCM)");
+                
+                let leftover = new Uint8Array(0);
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    // Combine leftover from previous chunk
+                    const chunk = new Uint8Array(leftover.length + value.length);
+                    chunk.set(leftover);
+                    chunk.set(value, leftover.length);
+                    
+                    // Ensure chunk length is a multiple of 4 bytes (2 channels * 2 bytes)
+                    const validLen = chunk.length - (chunk.length % 4);
+                    leftover = chunk.slice(validLen);
+                    
+                    const int16Array = new Int16Array(chunk.buffer, chunk.byteOffset, validLen / 2);
+                    const numFrames = int16Array.length / 2; // Stereo
+                    
+                    if (numFrames > 0) {
+                        const audioBuffer = pcmAudioCtx.createBuffer(2, numFrames, 44100);
+                        const leftChannel = audioBuffer.getChannelData(0);
+                        const rightChannel = audioBuffer.getChannelData(1);
+                        
+                        for (let i = 0; i < numFrames; i++) {
+                            leftChannel[i] = int16Array[i * 2] / 32768;
+                            rightChannel[i] = int16Array[i * 2 + 1] / 32768;
+                        }
+                        
+                        const source = pcmAudioCtx.createBufferSource();
+                        source.buffer = audioBuffer;
+                        source.connect(pcmGainNode);
+                        
+                        // Handle clock drift and prevent infinite latency buildup
+                        const currentTime = pcmAudioCtx.currentTime;
+                        if (nextTime < currentTime) {
+                            nextTime = currentTime + 0.05; // Catch up if buffer underflow
+                        } else if (nextTime > currentTime + 0.5) {
+                            // If latency is getting too high (>500ms), fast forward to reduce latency
+                            nextTime = currentTime + 0.1; 
+                        }
+                        
+                        source.start(nextTime);
+                        nextTime += audioBuffer.duration;
+                    }
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                console.error("Audio stream error:", err);
+                showToast("Audio failed. Check PC IP & Firewall (Port 8080)", "error");
+                stopStreamBtn.click();
+            }
+        }
+
+        startStreamBtn.onclick = () => {
+            let pcIp = document.getElementById('set_audio_ip').value.trim() || window.location.hostname;
+
+            // Fallback for local files or if no IP entered
+            if (!pcIp || pcIp === 'localhost' || pcIp === '127.0.0.1' || pcIp.includes('.local')) {
+                pcIp = localStorage.getItem('tef_wifi_ip') || pcIp;
+            }
+
+            localStorage.setItem('tef_audio_pc_ip', pcIp);
+            const streamUrl = `http://${pcIp}:8080/audio.mp3?t=${Date.now()}`;
+
+            playPCMStream(streamUrl);
+        };
+        stopStreamBtn.onclick = () => {
+            if (audioStreamAbort) audioStreamAbort.abort();
+            if (pcmAudioCtx) {
+                pcmAudioCtx.close();
+                pcmAudioCtx = null;
+            }
+            startStreamBtn.style.display = 'flex';
+            audioStreamContainer.style.display = 'none';
+        };
+
+        streamVol.oninput = () => {
+            if (pcmGainNode) pcmGainNode.gain.value = streamVol.value;
+        };
 
         function updateRDSUI() {
             const panel = document.getElementById('rdsPanel');
@@ -2030,6 +2464,7 @@
             document.getElementById('sysStatus').innerText = 'CONNECTING WiFi...';
             document.getElementById('sysStatus').style.color = 'var(--warn)';
 
+            localStorage.setItem('tef_wifi_ip', host);
             ws = new WebSocket(url);
             let connectTimeout = setTimeout(() => {
                 if (ws && ws.readyState !== WebSocket.OPEN) {
@@ -2048,6 +2483,15 @@
                 console.log('[WiFi] WebSocket connected to', url);
                 setConnectedUI('WiFi');
                 if (!renderRunning) { renderRunning = true; requestAnimationFrame(render); }
+                
+                // Auto-Discovery PC IP
+                const urlParams = new URLSearchParams(window.location.search);
+                const pcip = urlParams.get('pcip');
+                if (pcip) {
+                    console.log("[Auto-Discovery] Informing radio of PC IP:", pcip);
+                    setTimeout(() => send('i' + pcip), 500);
+                }
+
                 autoStartSweep(1500);
             };
 
@@ -2065,6 +2509,13 @@
                 console.log('[WiFi] WebSocket disconnected');
                 ws = null;
                 setDisconnectedUI();
+                // Auto-reconnect after 3 seconds if it wasn't a manual close
+                setTimeout(() => {
+                    if (!ws && document.getElementById('connBtn').innerText !== 'CONNECT') {
+                        console.log('[WiFi] Attempting auto-reconnect...');
+                        connectWiFi();
+                    }
+                }, 3000);
             };
 
             ws.onerror = (err) => {
@@ -2129,6 +2580,7 @@
 
         function autoStartSweep(delayMs) {
             setTimeout(() => {
+                send('*{"sync_req":1}'); // Request spectrum sync from other peers
                 window._targetVol = -2;
                 setTimeout(() => {
                     if (currentBand !== 1) switchBand(1);
@@ -2178,52 +2630,56 @@
         let currentUiState = {};
 
         let currentSda = 4, currentScl = 5;
-        let currentSmartI2C = 1;
-        let currentIms = 2, currentEq = 1, currentNb = 1, currentHc = 1, currentLc = 1, currentDeemph = 500;
+        let isSmartI2C = true;
+        let currentDeemph = 500;
         let currentAmAtten = 0, currentAmCoChan = 0;
-
+        let currentAmAgc = 900, currentAmAudioNB = 1, currentAmSoftMute = 1;
+        let currentWifiSsid = "", currentWifiIp = "", currentWifiStatus = "", currentWifiMode = 1;
+        let currentAudioServerIp = localStorage.getItem('tef_audio_pc_ip') || "";
+        let autoDXActive = 0;
         function openAdvanced() {
             if (document.getElementById('tutOverlay').style.display === 'block') return;
             document.getElementById('advModal').style.display = 'flex';
             send('R');
 
             const isFM = currentBand === 1;
-            document.getElementById('section_fm').style.opacity = isFM ? '1' : '0.4';
-            document.getElementById('section_fm').style.pointerEvents = isFM ? 'auto' : 'none';
             document.getElementById('section_am').style.opacity = !isFM ? '1' : '0.4';
             document.getElementById('section_am').style.pointerEvents = !isFM ? 'auto' : 'none';
 
             document.getElementById('set_autoScan').checked = currentUiState.autoScan !== false;
             document.getElementById('set_autoTune').checked = currentUiState.autoTune !== false;
-            document.getElementById('set_smartI2C').checked = currentSmartI2C === 1;
-
-            document.getElementById('set_ims').value = currentIms;
-            document.getElementById('set_eq').checked = currentEq === 1;
-            document.getElementById('set_nb').checked = currentNb === 1;
-            document.getElementById('set_hc').checked = currentHc === 1;
+            
             document.getElementById('set_deemph').value = currentDeemph;
 
             document.getElementById('set_am_atten').value = currentAmAtten;
             document.getElementById('set_am_cochan').value = currentAmCoChan;
-            document.getElementById('set_lc').checked = currentLc === 1;
 
-            if (currentUiState.softmute !== undefined) {
-                document.getElementById('set_softmute').value = currentUiState.softmute;
-                document.getElementById('val_softmute').innerText = currentUiState.softmute + ' dBµV';
-            }
-            if (currentUiState.stereo !== undefined) {
-                document.getElementById('set_stereo').value = currentUiState.stereo;
-                document.getElementById('val_stereo').innerText = currentUiState.stereo + ' dBµV';
-            }
-            if (currentUiState.highcut !== undefined) {
-                document.getElementById('set_highcut').value = currentUiState.highcut;
-                document.getElementById('val_highcut').innerText = currentUiState.highcut + ' dBµV';
-            }
+            if (currentUiState.dspProfile) document.getElementById('set_dspProfile').value = currentUiState.dspProfile;
+            document.getElementById('set_mphSupp').checked = currentUiState.mphSupp !== false;
+            document.getElementById('set_channelEq').checked = currentUiState.channelEq !== false;
 
             document.getElementById('set_sda').value = currentSda;
             document.getElementById('set_scl').value = currentScl;
+            document.getElementById('set_wifiMode').value = currentWifiMode;
 
-            document.getElementById('set_ssid').value = data.ssid || "";
+            if (currentWifiSsid) document.getElementById('set_ssid').value = currentWifiSsid;
+            if (currentWifiStatus) {
+                document.getElementById('wifiStatusInfo').style.display = 'block';
+                const ipDisplay = currentWifiStatus === 'OFF' ? 'N/A (WiFi disabled)' : (currentWifiIp || '...');
+                document.getElementById('wifiIpVal').innerText = ipDisplay;
+                document.getElementById('wifiStatusVal').innerText = currentWifiStatus || "CONNECTED";
+                if (currentWifiStatus === "OFF") {
+                    document.getElementById('wifiStatusVal').style.color = "#ff6666";
+                    document.getElementById('section_network').style.borderColor = "#ff6666";
+                } else if (currentWifiStatus === "AP_MODE") {
+                    document.getElementById('wifiStatusVal').style.color = "var(--warn)";
+                    document.getElementById('section_network').style.borderColor = "var(--warn)";
+                } else {
+                    document.getElementById('wifiStatusVal').style.color = "#4488ff";
+                    document.getElementById('section_network').style.borderColor = "#4488ff";
+                }
+            }
+            
             document.getElementById('set_lat').value = manualLat;
             document.getElementById('set_lon').value = manualLon;
 
@@ -2240,47 +2696,64 @@
             if (!confirm("Reset all settings to default? I2C pins will revert to 4 (SDA) and 5 (SCL).")) return;
             document.getElementById('set_autoScan').checked = false;
             document.getElementById('set_autoTune').checked = true;
-            document.getElementById('set_smartI2C').checked = false;
-            document.getElementById('set_softmute').value = 15;
-            document.getElementById('val_softmute').innerText = '15 dBµV';
-            document.getElementById('set_stereo').value = 30;
-            document.getElementById('val_stereo').innerText = '30 dBµV';
-            document.getElementById('set_highcut').value = 25;
-            document.getElementById('val_highcut').innerText = '25 dBµV';
+            
+            if(document.getElementById('set_dspProfile')) document.getElementById('set_dspProfile').value = 'auto';
+            if(document.getElementById('set_mphSupp')) document.getElementById('set_mphSupp').checked = true;
+            if(document.getElementById('set_channelEq')) document.getElementById('set_channelEq').checked = true;
+            if(document.getElementById('set_deemph')) document.getElementById('set_deemph').value = 500;
+            
             document.getElementById('set_sda').value = 4;
             document.getElementById('set_scl').value = 5;
             document.getElementById('advCmds').value = "";
         }
 
         function saveAdvanced() {
-            const sm = parseInt(document.getElementById('set_softmute').value);
-            const st = parseInt(document.getElementById('set_stereo').value);
-            const hc_thresh = parseInt(document.getElementById('set_highcut').value);
+            const dspProfile = document.getElementById('set_dspProfile') ? document.getElementById('set_dspProfile').value : 'auto';
+            const mphSupp = document.getElementById('set_mphSupp') ? document.getElementById('set_mphSupp').checked : true;
+            const channelEq = document.getElementById('set_channelEq') ? document.getElementById('set_channelEq').checked : true;
+            
             const sda = parseInt(document.getElementById('set_sda').value);
             const scl = parseInt(document.getElementById('set_scl').value);
-            const smartI2C = document.getElementById('set_smartI2C').checked ? 1 : 0;
 
-            const ims = document.getElementById('set_ims').value;
             const deemph = document.getElementById('set_deemph').value;
-            const eq = document.getElementById('set_eq').checked ? 1 : 0;
-            const nb = document.getElementById('set_nb').checked ? 1 : 0;
-            const hc = document.getElementById('set_hc').checked ? 1 : 0;
-            const lc = document.getElementById('set_lc').checked ? 1 : 0;
             const am_atten = document.getElementById('set_am_atten').value;
             const am_cochan = document.getElementById('set_am_cochan').value;
 
             currentUiState = {
                 autoScan: document.getElementById('set_autoScan').checked,
                 autoTune: document.getElementById('set_autoTune').checked,
-                softmute: sm,
-                stereo: st,
-                highcut: hc_thresh
+                dspProfile: dspProfile,
+                mphSupp: mphSupp,
+                channelEq: channelEq
             };
 
             let cmds = [];
-            cmds.push(`32,42,1,1,${sm * 10},100`);
-            cmds.push(`32,62,1,1,${st * 10},120`);
-            cmds.push(`32,52,1,1,${hc_thresh * 10},200`);
+
+            // Apply NXP recommended profiles (These do not get overwritten by syncDSP)
+            if (dspProfile === 'auto') {
+                cmds.push('32,40,1,1,200,500,10,20'); // Softmute Time
+                cmds.push('32,42,1,2,150,220');       // Softmute Level (15 dBuV, 22 dB slope)
+                cmds.push('32,60,1,1,200,4000,20,80');// Stereo Time
+                cmds.push('32,62,1,3,460,240');       // Stereo Level (46 dBuV, 24 dB slope)
+                cmds.push('32,50,1,1,200,500,10,80'); // Highcut Time (advised)
+                cmds.push('32,52,1,3,360,300');       // Highcut Level (36 dBuV, 30 dB slope)
+            } else if (dspProfile === 'dx') {
+                // Aggressive Weak Signal
+                cmds.push('32,40,1,1,200,500,10,20');
+                cmds.push('32,42,1,2,220,160');       // Softmute starts early 22 dBuV, steeper
+                cmds.push('32,60,1,1,200,4000,20,80');
+                cmds.push('32,62,1,3,520,180');       // Stereo blends to mono early 52 dBuV
+                cmds.push('32,50,1,1,200,500,10,80');
+                cmds.push('32,52,1,3,420,200');       // Highcut starts early 42 dBuV
+            } else if (dspProfile === 'hifi') {
+                // Maximum Fidelity
+                cmds.push('32,40,1,1,200,500,10,20');
+                cmds.push('32,42,1,2,80,300');        // Softmute starts late 8 dBuV
+                cmds.push('32,60,1,1,200,4000,20,80');
+                cmds.push('32,62,1,3,300,300');       // Stereo stays on until 30 dBuV
+                cmds.push('32,50,1,1,200,500,10,80');
+                cmds.push('32,52,1,3,200,300');       // Highcut stays off until 20 dBuV
+            }
 
             const lines = document.getElementById('advCmds').value.split('\n');
             let custom = lines.map(l => l.trim().replace(/\s+/g, '')).filter(l => l !== '');
@@ -2293,23 +2766,24 @@
             const am_agc = document.getElementById('set_am_agc').value;
             const am_audio_nb = document.getElementById('set_am_audio_nb').checked ? 1 : 0;
             const am_softmute = document.getElementById('set_am_softmute').checked ? 1 : 0;
+            const wifiMode = parseInt(document.getElementById('set_wifiMode').value);
 
             let queue = [
                 'W' + packed,
-                'Z' + smartI2C,
                 'J' + JSON.stringify(currentUiState),
-                'M' + ims,
+                'M' + (mphSupp ? 1 : 0),
                 'D' + deemph,
-                'E' + eq,
-                'N' + nb,
-                'H' + hc,
-                'L' + lc,
+                'E' + (channelEq ? 1 : 0),
                 'Y' + am_atten,
                 'K' + am_cochan,
                 'G' + am_agc,
                 'N' + am_audio_nb,
                 'T' + am_softmute
             ];
+
+            if (wifiMode !== currentWifiMode) {
+                queue.push('w' + wifiMode);
+            }
 
             const newSsid = document.getElementById('set_ssid').value.trim();
             const newPass = document.getElementById('set_pass').value.trim();
@@ -2331,17 +2805,11 @@
                 delay += 35;
             });
 
-            currentSmartI2C = smartI2C;
-            currentIms = parseInt(ims);
             currentDeemph = parseInt(deemph);
-            currentEq = eq;
-            currentNb = nb;
-            currentHc = hc;
-            currentLc = lc;
             currentAmAtten = parseInt(am_atten);
             currentAmCoChan = parseInt(am_cochan);
 
-            const saveBtn = document.querySelector('#advModal .btn-active');
+            const saveBtn = document.getElementById('saveAdvBtn');
             if (saveBtn) {
                 const origText = saveBtn.innerText;
                 saveBtn.innerText = "SAVED ✓";
@@ -2352,7 +2820,7 @@
                     saveBtn.style.background = "";
                     saveBtn.style.color = "";
                     closeAdvanced();
-                }, 800);
+                }, 1200);
             } else {
                 closeAdvanced();
             }
@@ -2368,45 +2836,139 @@
             const data = JSON.parse(str);
             if (!data) return;
 
+            if (data.sync_req === 1) {
+                if (window._syncResTimer) clearTimeout(window._syncResTimer);
+                window._syncResTimer = setTimeout(() => {
+                    for (let bandId in bandScans) {
+                        const bData = bandScans[bandId];
+                        if (bData && bData.size > 10) {
+                            let chunkStr = "";
+                            let chunkIdx = 0;
+                            for(let [f, s] of bData.entries()) {
+                                chunkStr += f.toString(36) + "," + Math.round(s).toString(36) + ";";
+                                if (chunkStr.length > 500) {
+                                    send(`*{"sync_res":1,"b":${bandId},"c":${chunkIdx},"d":"${chunkStr}"}`, true);
+                                    chunkIdx++;
+                                    chunkStr = "";
+                                }
+                            }
+                            if (chunkStr.length > 0) {
+                                send(`*{"sync_res":1,"b":${bandId},"c":${chunkIdx},"d":"${chunkStr}"}`, true);
+                            }
+                        }
+                    }
+                }, Math.random() * 800 + 200);
+                return;
+            }
+
+            if (data.sync_res === 1) {
+                if (window._syncResTimer) { clearTimeout(window._syncResTimer); window._syncResTimer = null; }
+                const targetBand = bandScans[data.b];
+                if (targetBand) {
+                    if (data.c === 0) { targetBand.clear(); scanDataDirty = true; }
+                    data.d.split(";").forEach(pair => {
+                        if (!pair) return;
+                        const parts = pair.split(",");
+                        if (parts.length === 2) {
+                            targetBand.set(parseInt(parts[0], 36), parseInt(parts[1], 36));
+                        }
+                    });
+                    if (data.b === currentBand) scanDataDirty = true;
+                }
+                return;
+            }
+
+            // Sync UI Widgets (even if modal is closed)
+            const updateIfActive = (id, val, type = 'value') => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (document.activeElement === el) return; // Don't interrupt user typing/sliding
+                if (type === 'checked') el.checked = !!val;
+                else el.value = val;
+            };
+
             if (data.initCmds !== undefined) {
                 currentInitCmds = data.initCmds;
                 if (data.uiState) currentUiState = data.uiState;
                 if (data.smartI2C !== undefined) {
-                    currentSmartI2C = data.smartI2C;
-                    const stBox = document.getElementById('set_smartI2C');
-                    if (stBox) stBox.checked = (currentSmartI2C === 1);
+                    isSmartI2C = (data.smartI2C === 1);
+                    const btn = document.getElementById('smartI2CBtn');
+                    if (btn) {
+                        btn.style.background = isSmartI2C ? "var(--accent)" : "#222";
+                        btn.style.color = isSmartI2C ? "#000" : "var(--dim)";
+                    }
                 }
-                if (data.ims !== undefined) currentIms = data.ims;
-                if (data.eq !== undefined) currentEq = data.eq;
-                if (data.nb !== undefined) currentNb = data.nb;
-                if (data.hc !== undefined) currentHc = data.hc;
-                if (data.lc !== undefined) currentLc = data.lc;
                 if (data.deemph !== undefined) currentDeemph = data.deemph;
                 if (data.sda !== undefined) currentSda = data.sda;
                 if (data.scl !== undefined) currentScl = data.scl;
+                if (data.wifiMode !== undefined) currentWifiMode = data.wifiMode;
+                if (data.audio_ip !== undefined && data.audio_ip !== "") {
+                    currentAudioServerIp = data.audio_ip;
+                    localStorage.setItem('tef_audio_pc_ip', currentAudioServerIp);
+                    updateIfActive('set_audio_ip', currentAudioServerIp);
+                }
                 if (data.am_atten !== undefined) currentAmAtten = data.am_atten;
                 if (data.am_cochan !== undefined) currentAmCoChan = data.am_cochan;
                 if (data.am_agc !== undefined) currentAmAgc = data.am_agc;
                 if (data.am_audio_nb !== undefined) currentAmAudioNB = data.am_audio_nb;
                 if (data.am_softmute !== undefined) currentAmSoftMute = data.am_softmute;
+                if (data.ip !== undefined) currentWifiIp = data.ip;
+                if (data.wifiStatus !== undefined) currentWifiStatus = data.wifiStatus;
+                if (data.ssid !== undefined) currentWifiSsid = data.ssid; // Bug fix: populate SSID from report
 
-                if (document.getElementById('advModal').style.display === 'flex') {
-                    document.getElementById('set_sda').value = currentSda;
-                    document.getElementById('set_scl').value = currentScl;
-                    document.getElementById('set_ims').value = currentIms;
-                    document.getElementById('set_deemph').value = currentDeemph;
-                    document.getElementById('set_eq').checked = (currentEq === 1);
-                    document.getElementById('set_nb').checked = (currentNb === 1);
-                    document.getElementById('set_hc').checked = (currentHc === 1);
-                    document.getElementById('set_lc').checked = (currentLc === 1);
-                    document.getElementById('set_am_atten').value = currentAmAtten;
-                    document.getElementById('set_am_cochan').value = currentAmCoChan;
-                    document.getElementById('set_am_agc').value = currentAmAgc;
-                    document.getElementById('agcVal').innerText = (currentAmAgc / 10) + ' dBuV';
-                    document.getElementById('set_am_audio_nb').checked = (currentAmAudioNB === 1);
-                    document.getElementById('set_am_softmute').checked = (currentAmSoftMute === 1);
-                    document.getElementById('set_ssid').value = data.ssid || "";
-                    document.getElementById('advCmds').value = currentInitCmds.split(';').filter(c => c.trim() !== '').join('\n');
+                if (data.scan === 0 && isScanning) {
+                    isScanning = false;
+                    if (activeScanBtn) activeScanBtn.classList.remove('btn-active');
+                    activeScanBtn = null;
+                    document.getElementById('sysStatus').innerText = "REMOTE STOP";
+                }
+
+                updateIfActive('set_sda', currentSda);
+                updateIfActive('set_scl', currentScl);
+                updateIfActive('set_wifiMode', currentWifiMode);
+                updateIfActive('set_deemph', currentDeemph);
+                updateIfActive('set_am_atten', currentAmAtten);
+                updateIfActive('set_am_cochan', currentAmCoChan);
+                updateIfActive('set_am_agc', currentAmAgc);
+                const agcLabel = document.getElementById('agcVal');
+                if (agcLabel) agcLabel.innerText = (currentAmAgc / 10) + ' dBuV';
+                updateIfActive('set_am_audio_nb', currentAmAudioNB === 1, 'checked');
+                updateIfActive('set_am_softmute', currentAmSoftMute === 1, 'checked');
+                updateIfActive('set_ssid', currentWifiSsid);
+                updateIfActive('set_autoDX', autoDXActive === 1, 'checked');
+                
+                const savedAudioIp = localStorage.getItem('tef_audio_pc_ip');
+                if (savedAudioIp) updateIfActive('set_audio_ip', savedAudioIp);
+
+                // Show WiFi status info panel for all known states
+                if (currentWifiStatus) {
+                    const info = document.getElementById('wifiStatusInfo');
+                    if (info) info.style.display = 'block';
+                    const ipVal = document.getElementById('wifiIpVal');
+                    if (ipVal) ipVal.innerText = currentWifiStatus === 'OFF' ? 'N/A (WiFi disabled)' : (currentWifiIp || '...');
+                    const stVal = document.getElementById('wifiStatusVal');
+                    if (stVal) {
+                        stVal.innerText = currentWifiStatus;
+                        stVal.style.color = currentWifiStatus === 'OFF' ? '#ff6666' :
+                                            currentWifiStatus === 'AP_MODE' ? 'var(--warn)' : '#4488ff';
+                    }
+                }
+
+                const cmdArea = document.getElementById('advCmds');
+                if (cmdArea && document.activeElement !== cmdArea) {
+                    cmdArea.value = currentInitCmds.split(';').filter(c => c.trim() !== '').join('\n');
+                }
+                
+                // Smart Setup Detection
+                if (currentWifiStatus === "AP_MODE") {
+                    setTimeout(() => {
+                        if (document.getElementById('welcomeModal').style.display === 'flex') {
+                            const p = document.querySelector('#welcomeStep1 p');
+                            p.innerHTML = '<b style="color:var(--warn)">RADIO IN SETUP MODE</b><br>You are connected to the radio\'s own WiFi. Please enter your home WiFi credentials in the Settings.';
+                            p.style.color = "var(--warn)";
+                            openAdvanced();
+                        }
+                    }, 1500);
                 }
                 return;
             }
@@ -2427,27 +2989,57 @@
 
             document.getElementById('badgeMute').style.display = isMuted ? 'block' : 'none';
 
-            if (isScanning || data.f === currentFreq) {
+            if (data.f !== undefined && data.s !== undefined) {
                 const scanData = getScanData();
-                const prev = scanData.get(data.f) || data.s;
-                scanData.set(data.f, data.s * 0.7 + prev * 0.3);
-                scanDataDirty = true;
-            }
+                const prev = scanData.get(data.f);
+                const newVal = data.s * 0.7 + (prev !== undefined ? prev : data.s) * 0.3;
+                scanData.set(data.f, newVal);
+                
+                if (isScanning || prev === undefined) {
+                    scanDataDirty = true;
+                } else {
+                    // Fast path: Just update the sorted array in place if it exists
+                    if (!scanDataDirty && scanDataSorted.length > 0) {
+                        // Binary search to update existing value
+                        let lo = 0, hi = scanDataSorted.length - 1;
+                        while (lo <= hi) {
+                            const mid = (lo + hi) >> 1;
+                            const midF = scanDataSorted[mid][0];
+                            if (midF === data.f) {
+                                scanDataSorted[mid][1] = newVal;
+                                break;
+                            } else if (midF < data.f) {
+                                lo = mid + 1;
+                            } else {
+                                hi = mid - 1;
+                            }
+                        }
+                    }
+                }
 
-            if (!isScanning && data.f !== currentFreq) {
-                currentFreq = data.f;
-                rds.reset();
-                updateRDSUI();
+                if (data.f !== currentFreq) {
+                    currentFreq = data.f;
+                    // If not scanning, make the graph follow the tuning
+                    if (!isScanning) {
+                        viewCenter = data.f;
+                        updateRDSUI();
+                    }
+                    rds.reset();
+                }
             }
 
             if (data.s !== undefined) smoothRSSI = smoothRSSI * 0.8 + data.s * 0.2;
 
             if (data.f !== undefined) {
-                const displayFreq = (data.m === 1) ? (data.f / 100).toFixed(2) : data.f;
-                document.getElementById('fMain').innerText = displayFreq;
+                const isFMBand = (currentBand === 1 || (currentBand === 4 && document.getElementById('customMode') && document.getElementById('customMode').value === 'F'));
+                const displayFreq = (data.m === 1 || isFMBand) ? (data.f / 100).toFixed(2) : data.f;
+                const fEl = document.getElementById('fMain');
+                if (fEl && document.activeElement !== document.getElementById('tuneInput')) {
+                    fEl.innerText = displayFreq;
+                }
             }
             document.getElementById('sigVal').innerText = smoothRSSI.toFixed(1);
-            document.getElementById('offVal').innerText = data.o;
+            document.getElementById('offVal').innerText = data.o !== undefined ? data.o : "0.0";
 
             updateRDSUI();
 
@@ -2572,6 +3164,7 @@
         }
 
         function render() {
+            const accent = currentThemeAccent;
             const w = canvas.width / dpr;
             const h = canvas.height / dpr;
 
@@ -2644,11 +3237,12 @@
                 let lastF = scanDataSorted[Math.min(endIdx, scanDataSorted.length - 1)][0];
                 ctx.lineTo(fToX(lastF), h);
                 ctx.closePath();
-                ctx.fillStyle = 'rgba(0, 255, 170, 0.08)';
+                const accent = currentThemeAccent;
+                ctx.fillStyle = hexToRgba(accent, 0.08);
                 ctx.fill();
 
                 ctx.beginPath();
-                ctx.strokeStyle = '#00ffaa';
+                ctx.strokeStyle = accent;
                 ctx.lineWidth = 1.5;
                 first = true;
                 for (let i = startIdx; i <= endIdx; i += pixelStep) {
@@ -2738,7 +3332,7 @@
                     ctx.beginPath();
                     ctx.roundRect(pillX, labelY - 3, pillW, 14, 3);
                     ctx.fill();
-                    ctx.strokeStyle = 'rgba(0, 255, 170, 0.4)';
+                    ctx.strokeStyle = hexToRgba(accent, 0.4);
                     ctx.lineWidth = 0.5;
                     ctx.stroke();
 
@@ -2751,14 +3345,14 @@
                         const tag = info.tags.split(',')[0].trim();
                         if (tag) {
                             ctx.font = '7px monospace';
-                            ctx.fillStyle = 'rgba(0, 255, 170, 0.5)';
+                            ctx.fillStyle = hexToRgba(accent, 0.5);
                             ctx.textAlign = 'center';
                             ctx.fillText(tag.toUpperCase(), x, labelY + 19);
                             ctx.textAlign = 'left';
                         }
                     }
 
-                    ctx.fillStyle = 'rgba(0, 255, 170, 0.9)';
+                    ctx.fillStyle = hexToRgba(accent, 0.9);
                     ctx.beginPath();
                     ctx.moveTo(x, peakY - 3);
                     ctx.lineTo(x + 3, peakY);
@@ -2802,8 +3396,12 @@
         });
 
         canvas.addEventListener('mousemove', e => {
+            handleMove(e.clientX, e.clientY);
+        });
+
+        function handleMove(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
-            const y = e.clientY - rect.top;
+            const y = clientY - rect.top;
 
             if (squelchEnabled) {
                 const sqY = rect.height - (squelchLevel / 85) * rect.height;
@@ -2823,10 +3421,89 @@
             }
 
             if (!isDragging) return;
-            const dx = e.clientX - lastMouseX;
+            const dx = clientX - lastMouseX;
             if (Math.abs(dx) > 2) didDrag = true;
-            lastMouseX = e.clientX;
+            lastMouseX = clientX;
             viewCenter -= dx * (viewSpan / (canvas.width / dpr));
+        }
+
+        // --- NATIVE TOUCH SUPPORT ---
+        let lastTouchDist = 0;
+        let wasPinching = false;
+
+        canvas.addEventListener('touchstart', e => {
+            const rect = canvas.getBoundingClientRect();
+            
+            if (e.touches.length === 2) {
+                // Pinch to zoom start
+                wasPinching = true;
+                lastTouchDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                e.preventDefault();
+                return;
+            }
+
+            const touch = e.touches[0];
+            const y = touch.clientY - rect.top;
+
+            if (squelchEnabled) {
+                const sqY = rect.height - (squelchLevel / 85) * rect.height;
+                if (Math.abs(y - sqY) < 35) { // Larger touch target for mobile squelch
+                    isDraggingSquelch = true;
+                    e.preventDefault();
+                    return;
+                }
+            }
+            isDragging = true;
+            didDrag = false;
+            lastMouseX = touch.clientX;
+            e.preventDefault();
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', e => {
+            if (e.touches.length === 2) {
+                // Pinch to zoom
+                const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                if (lastTouchDist > 0) {
+                    const ratio = lastTouchDist / dist;
+                    viewSpan = Math.max(100, Math.min(50000, viewSpan * ratio));
+                }
+                lastTouchDist = dist;
+                e.preventDefault();
+                return;
+            }
+
+            const touch = e.touches[0];
+            handleMove(touch.clientX, touch.clientY);
+            e.preventDefault();
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', e => {
+            if (e.touches.length < 2) lastTouchDist = 0;
+            
+            if (!didDrag && !isDraggingSquelch && !wasPinching && e.changedTouches.length === 1) {
+                const touch = e.changedTouches[0];
+                const rect = canvas.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const minF = viewCenter - viewSpan / 2;
+                const clickedFreq = minF + (x / rect.width) * viewSpan;
+                
+                const windowSize = viewSpan * 0.02;
+                let bestF = Math.round(clickedFreq), maxS = -1;
+                const scanData = getScanData();
+                scanData.forEach((s, f) => {
+                    if (Math.abs(f - clickedFreq) < windowSize && s > maxS) { maxS = s; bestF = f; }
+                });
+                tuneTo(bestF);
+            }
+            isDragging = false;
+            isDraggingSquelch = false;
+            if (e.touches.length === 0) wasPinching = false;
         });
 
         canvas.addEventListener('click', e => {
@@ -2859,12 +3536,13 @@
             document.getElementById('rdsRTPanel').innerText = "Waiting for Radio Text...";
             document.getElementById('rdsRTHeader').classList.remove('animate-scroll');
 
-            if (currentBand === 1) {
+            const isFMBand = (currentBand === 1 || (currentBand === 4 && document.getElementById('customMode') && document.getElementById('customMode').value === 'F'));
+            if (isFMBand) {
                 document.getElementById('manualInput').value = (f / 100).toFixed(2);
             } else {
                 document.getElementById('manualInput').value = f;
             }
-            send((currentBand === 1 ? "F" : "A") + f);
+            send((isFMBand ? "F" : "A") + f);
         }
 
         function stepFreq(delta) {
@@ -2977,19 +3655,41 @@
 
             await new Promise(r => setTimeout(r, 400));
 
-            let start, end, step;
-            if (currentBand === 1) { start = 8750; end = 10800; step = 10; }
-            else if (currentBand === 2) { start = 522; end = 1710; step = 9; }
-            else { start = 5900; end = 18000; step = 5; }
+            let start, end, step, modeCmd;
+            if (currentBand === 1) { start = 8750; end = 10800; step = 10; modeCmd = "F"; }
+            else if (currentBand === 2) { start = 522; end = 1710; step = 9; modeCmd = "A"; }
+            else if (currentBand === 3) { start = 5900; end = 18000; step = 5; modeCmd = "A"; }
+            else { 
+                modeCmd = document.getElementById('customMode').value;
+                start = parseInt(document.getElementById('customStart').value);
+                end = parseInt(document.getElementById('customEnd').value);
+                step = parseInt(document.getElementById('customStep').value);
+                if(isNaN(start)) start = modeCmd === "F" ? 6500 : 144;
+                if(isNaN(end)) end = modeCmd === "F" ? 10800 : 27000;
+                if(isNaN(step) || step <= 0) step = modeCmd === "F" ? 10 : 9;
+            }
 
             for (let f = start; f <= end; f += step) {
                 if (!isScanning) break;
-                await send((currentBand === 1 ? "F" : "A") + f);
-                await new Promise(r => setTimeout(r, type === 'Q' ? 35 : 85));
+                await send(modeCmd + f);
+                
+                let timeout = type === 'Q' ? 200 : 300; 
+                let waited = 0;
+                while (waited < timeout) {
+                    if (getScanData().has(f)) {
+                        break;
+                    }
+                    await new Promise(r => setTimeout(r, 5));
+                    waited += 5;
+                }
+                
+                // Small buffer to prevent main thread lockup if responses are instant
+                await new Promise(r => setTimeout(r, type === 'Q' ? 5 : 20));
+
                 const scanData = getScanData();
                 const sig = scanData.get(f) || 0;
                 if (sig > 25) {
-                    const label = currentBand === 1 ? (f / 100).toFixed(2) : f;
+                    const label = modeCmd === "F" ? (f / 100).toFixed(2) : f;
                     const row = `<div class="log-row"><span>${label}</span><b>${sig.toFixed(1)}</b></div>`;
                     const logEl = document.getElementById('log');
                     logEl.insertAdjacentHTML('afterbegin', row);
@@ -3047,7 +3747,7 @@
                 });
             }
 
-            const isFM = (b === 1);
+            const isFM = (b === 1 || (b === 4 && document.getElementById('customMode').value === 'F'));
             document.getElementById('dash_audio').style.display = isFM ? 'flex' : 'none';
             document.getElementById('dash_usn').style.display = isFM ? 'flex' : 'none';
             document.getElementById('dash_wam').style.display = isFM ? 'flex' : 'none';
@@ -3060,32 +3760,63 @@
 
             if (b === 1) { viewCenter = 9775; viewSpan = 2200; }
             else if (b === 2) { viewCenter = 1000; viewSpan = 1300; }
-            else { viewCenter = 10000; viewSpan = 13000; }
+            else if (b === 3) { viewCenter = 10000; viewSpan = 13000; }
+            else { 
+                const st = parseInt(document.getElementById('customStart').value) || 144;
+                const en = parseInt(document.getElementById('customEnd').value) || 27000;
+                viewCenter = (st + en) / 2; viewSpan = (en - st) + ((en - st) * 0.1);
+            }
 
             document.getElementById('bandFM').classList.toggle('btn-active', b === 1);
             document.getElementById('bandMW').classList.toggle('btn-active', b === 2);
             document.getElementById('bandSW').classList.toggle('btn-active', b === 3);
+            document.getElementById('bandFull').classList.toggle('btn-active', b === 4);
+            
+            const customConfig = document.getElementById('customScanConfig');
+            if (customConfig) {
+                customConfig.style.display = (b === 4) ? 'grid' : 'none';
+            }
         }
 
         let lastSendTime = 0;
-        async function send(m) {
+        let serialWriter = null;
+        let serialLock = false;
+
+        async function send(m, critical = false) {
             const now = Date.now();
-            if (now - lastSendTime < 20) return;
+            if (!critical && now - lastSendTime < 20) return;
             lastSendTime = now;
 
             if (ws && ws.readyState === WebSocket.OPEN) {
                 try { ws.send(m); } catch (e) { console.error('WebSocket send error:', e); }
                 return;
             }
+            
             if (!port || !port.writable) return;
-            let w;
+            
+            // Mutex to prevent concurrent Serial writes
+            while (serialLock) { await new Promise(r => setTimeout(r, 5)); }
+            serialLock = true;
+
             try {
-                w = port.writable.getWriter();
-                await w.write(new TextEncoder().encode(m + "\n"));
+                if (!serialWriter) {
+                    serialWriter = port.writable.getWriter();
+                }
+                await serialWriter.write(new TextEncoder().encode(m + "\n"));
+                
+                // Release lock if not in a high-speed scan
+                if (critical || !isScanning) {
+                    await serialWriter.releaseLock();
+                    serialWriter = null;
+                }
             } catch (e) {
                 console.error('Serial write error:', e);
+                if (serialWriter) {
+                    try { serialWriter.releaseLock(); } catch(err){}
+                    serialWriter = null;
+                }
             } finally {
-                if (w) try { w.releaseLock(); } catch (e) { }
+                serialLock = false;
             }
         }
 
@@ -3138,6 +3869,19 @@
             }
         }
 
+        function toggleSmartI2C() {
+            isSmartI2C = !isSmartI2C;
+            const btn = document.getElementById('smartI2CBtn');
+            send('Z' + (isSmartI2C ? 1 : 0));
+            if (isSmartI2C) {
+                btn.style.background = "var(--accent)";
+                btn.style.color = "#000";
+            } else {
+                btn.style.background = "#222";
+                btn.style.color = "var(--dim)";
+            }
+        }
+
         function toggleSquelch() {
             squelchEnabled = !squelchEnabled;
             const btn = document.getElementById('sqToggle');
@@ -3148,6 +3892,14 @@
             } else {
                 btn.style.color = 'var(--dim)';
                 btn.style.background = '#222';
+            }
+        }
+
+        async function killWiFi() {
+            if (confirm("ATTENTION: This will COMPLETELY DISABLE the WiFi radio on the ESP32 to eliminate interference.\n\nOnce disabled, the web interface will be UNREACHABLE. You must connect via USB Serial and send 'w1' to re-enable WiFi.\n\nAre you sure you want to proceed?")) {
+                await send('w0', true);
+                alert("WiFi Kill Command Sent. Connection will now drop.");
+                setTimeout(() => window.location.reload(), 1000);
             }
         }
 
@@ -3532,6 +4284,9 @@
         }
 
         (function () {
+            const savedIp = localStorage.getItem('tef_wifi_ip');
+            if (savedIp) document.getElementById('wifiIpInput').value = savedIp;
+
             if (localStorage.getItem('radio_use_default_db') === 'true') {
                 if (typeof defaultStationsData !== 'undefined') {
                     loadDefaultStations();
@@ -3650,14 +4405,17 @@
             }
 
             const btn = document.getElementById('listenBtn');
+            const recordBtn = document.getElementById('recordBtn');
             if (isListening) {
                 btn.innerText = "LISTEN ON";
                 btn.style.color = "var(--accent)";
                 btn.style.borderColor = "var(--accent)";
+                recordBtn.style.display = 'inline-block';
             } else {
                 btn.innerText = "LISTEN OFF";
                 btn.style.color = "#fff";
                 btn.style.borderColor = "#333";
+                if (!isRecording) recordBtn.style.display = 'none';
             }
         }
 
@@ -3688,6 +4446,109 @@
         async function updateAudioDevice(id) {
             currentAudioDeviceId = id;
             await initAudio(id);
+        }
+
+        // --- RECORDING ENGINE ---
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let recordingStartTime = 0;
+        let recordingTimerInterval = null;
+
+        function toggleRecording() {
+            if (isRecording) stopRecording();
+            else startRecording();
+        }
+
+        async function startRecording() {
+            if (!audioContext) {
+                alert("Please enable LISTEN first to initialize the audio engine.");
+                return;
+            }
+
+            try {
+                // Connect to the analyzer to get the audio before gain/mute
+                // This allows recording even if the local volume is low
+                const dest = audioContext.createMediaStreamDestination();
+                analyzer.connect(dest);
+
+                const options = {
+                    mimeType: 'audio/ogg; codecs=opus',
+                    audioBitsPerSecond: 128000
+                };
+
+                // Fallback for browsers that don't support ogg/opus (like some mobile)
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    console.warn("Opus in OGG not supported, trying default");
+                    delete options.mimeType;
+                }
+
+                mediaRecorder = new MediaRecorder(dest.stream, options);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) audioChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+                    const time = new Date().toLocaleTimeString().replace(/[:\s]/g, '-');
+                    const freq = document.getElementById('fMain').innerText;
+                    const ps = document.getElementById('psMain').innerText.trim().replace(/[^a-z0-9]/gi, '_');
+                    
+                    a.href = url;
+                    a.download = `TEF6686_${freq}MHz_${ps}_${timestamp}_${time}.ogg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                recordingStartTime = Date.now();
+                updateRecordUI();
+                recordingTimerInterval = setInterval(updateRecordUI, 1000);
+                
+                if (typeof showToast !== 'undefined') showToast("Recording started (128kbps Opus)");
+                else console.log("Recording started");
+            } catch (err) {
+                console.error("Recording failed:", err);
+                alert("Failed to start recording: " + err.message);
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            isRecording = false;
+            clearInterval(recordingTimerInterval);
+            updateRecordUI();
+            
+            // If we are also not listening, hide the button
+            if (!isListening) {
+                document.getElementById('recordBtn').style.display = 'none';
+            }
+
+            if (typeof showToast !== 'undefined') showToast("Recording saved");
+        }
+
+        function updateRecordUI() {
+            const btn = document.getElementById('recordBtn');
+            if (isRecording) {
+                const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+                const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const secs = (elapsed % 60).toString().padStart(2, '0');
+                btn.innerText = `STOP (${mins}:${secs})`;
+                btn.classList.add('recording-active');
+            } else {
+                btn.innerText = "RECORD";
+                btn.classList.remove('recording-active');
+            }
         }
 
         function drawVisualizer() {
@@ -3724,6 +4585,337 @@
                     ctx.fillRect(x, h - barHeight, barWidth, 1.5);
                 }
             }
+        }
+
+        // ═══════════════════════════════════════════════
+        // DX STATION MAP INTEGRATION
+        // ═══════════════════════════════════════════════
+        let dxMap = null, dxMapOpen = false;
+        let dxMarkersLayer = null, dxCirclesLayer = null, dxUserMarker = null;
+        let mapSortMode = 'dist', mapCountryFilter = 'all';
+        let mapScanActive = false, mapScanAbort = false;
+        let mapScanResults = {};
+        let mapScanNoiseFloor = 10;
+        const MAP_COLORS = { DNK:'#00ccff', D:'#ff9900', S:'#cc44ff' };
+        const DX_FACTOR = 25;
+
+        function toggleDXMap() {
+            const overlay = document.getElementById('dxMapOverlay');
+            dxMapOpen = !dxMapOpen;
+            overlay.style.display = dxMapOpen ? 'block' : 'none';
+            if (dxMapOpen && !dxMap) {
+                initDXMap();
+            }
+            if (dxMapOpen) {
+                setTimeout(() => { dxMap.invalidateSize(); renderDXMap(); }, 300);
+            }
+        }
+
+        function initDXMap() {
+            const renderer = L.canvas({ padding: 0.5 });
+            dxMap = L.map('dxMapContainer', { zoomControl: false, renderer }).setView([56, 11], 6);
+            const dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution:'CARTO', maxZoom:19 }).addTo(dxMap);
+            const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'Esri', maxZoom:19 });
+            L.control.layers({ 'Dark': dark, 'Satellite': sat }, null, { position:'topright' }).addTo(dxMap);
+            L.control.zoom({ position:'bottomright' }).addTo(dxMap);
+            L.control.scale({ position:'bottomleft', imperial:false }).addTo(dxMap);
+
+            dxCirclesLayer = L.layerGroup().addTo(dxMap);
+            dxMarkersLayer = L.layerGroup().addTo(dxMap);
+
+            // Country legend
+            const legend = L.control({ position: 'bottomleft' });
+            legend.onAdd = () => {
+                const d = L.DomUtil.create('div');
+                d.style = 'background:rgba(10,10,15,.85);backdrop-filter:blur(8px);padding:8px 14px;border-radius:6px;border:1px solid #333;font-size:.72em;display:flex;gap:12px;color:#aaa;';
+                d.innerHTML = '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#00ccff;margin-right:4px;vertical-align:middle;"></span>DNK</span><span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff9900;margin-right:4px;vertical-align:middle;"></span>D</span><span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#cc44ff;margin-right:4px;vertical-align:middle;"></span>S</span>';
+                return d;
+            };
+            legend.addTo(dxMap);
+
+            // Sort/Country button wiring
+            document.querySelectorAll('[data-msort]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    mapSortMode = btn.dataset.msort;
+                    document.querySelectorAll('[data-msort]').forEach(b => { b.style.background='#1a1a1a'; b.style.color='#fff'; b.style.borderColor='#333'; });
+                    btn.style.background='#00ccff'; btn.style.color='#000'; btn.style.borderColor='#00ccff';
+                    renderDXMap();
+                });
+            });
+            document.querySelectorAll('[data-mcountry]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    mapCountryFilter = btn.dataset.mcountry;
+                    document.querySelectorAll('[data-mcountry]').forEach(b => { b.style.background='#1a1a1a'; b.style.color='#fff'; b.style.borderColor='#333'; });
+                    btn.style.background='#ff3366'; btn.style.color='#000'; btn.style.borderColor='#ff3366';
+                    renderDXMap();
+                });
+            });
+
+            document.getElementById('mapLat').addEventListener('change', renderDXMap);
+            document.getElementById('mapLon').addEventListener('change', renderDXMap);
+            document.getElementById('mapFill').addEventListener('change', renderDXMap);
+            document.getElementById('mapCircles').addEventListener('change', renderDXMap);
+        }
+
+        function haversineMap(lat1, lon1, lat2, lon2) {
+            const R = 6371, dr = Math.PI / 180;
+            const dLat = (lat2 - lat1) * dr, dLon = (lon2 - lon1) * dr;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*dr)*Math.cos(lat2*dr)*Math.sin(dLon/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function renderDXMap() {
+            if (!dxMap || typeof MAP_STATIONS === 'undefined') return;
+            const uLat = parseFloat(document.getElementById('mapLat').value);
+            const uLon = parseFloat(document.getElementById('mapLon').value);
+            if (isNaN(uLat) || isNaN(uLon)) return;
+
+            const showFill = document.getElementById('mapFill').checked;
+            const showCircles = document.getElementById('mapCircles').checked;
+
+            dxCirclesLayer.clearLayers();
+            dxMarkersLayer.clearLayers();
+
+            const visible = [];
+            for (const s of MAP_STATIONS) {
+                if (mapCountryFilter !== 'all' && s.c !== mapCountryFilter) continue;
+                const d = haversineMap(uLat, uLon, s.la, s.lo);
+                const r = Math.sqrt(s.w) * DX_FACTOR;
+                if (d <= r) {
+                    s._d = d; s._r = r;
+                    visible.push(s);
+                }
+            }
+
+            visible.sort((a, b) => {
+                if (mapSortMode === 'dist') return a._d - b._d;
+                if (mapSortMode === 'freq') return parseFloat(a.f) - parseFloat(b.f);
+                if (mapSortMode === 'power') return b.w - a.w;
+                return 0;
+            });
+
+            document.getElementById('mapStatCount').textContent = visible.length + ' receivable';
+            if (visible.length > 0) {
+                const freqs = visible.map(s => parseFloat(s.f));
+                document.getElementById('mapStatRange').textContent = Math.min(...freqs).toFixed(1) + ' – ' + Math.max(...freqs).toFixed(1) + ' MHz';
+            } else {
+                document.getElementById('mapStatRange').textContent = '—';
+            }
+
+            const markerRefs = {};
+            for (const s of visible) {
+                const color = MAP_COLORS[s.c] || '#888';
+                const ll = [s.la, s.lo];
+
+                if (showCircles) {
+                    L.circle(ll, {
+                        radius: s._r * 1000, color, weight: 0.8, opacity: 0.4,
+                        fill: showFill, fillColor: color, fillOpacity: showFill ? 0.03 : 0,
+                        interactive: false
+                    }).addTo(dxCirclesLayer);
+                }
+
+                const m = L.circleMarker(ll, {
+                    radius: Math.max(2, Math.min(5, Math.log10(s.w + 1) * 3)),
+                    fillColor: color, color: '#fff', weight: 0.6, fillOpacity: 0.9
+                }).addTo(dxMarkersLayer);
+
+                const isCurrentFreq = currentBand === 1 && (currentFreq / 100).toFixed(2) === parseFloat(s.f).toFixed(2);
+                const popHtml = `<div style="min-width:200px;font-family:Inter,sans-serif;">
+                    <h3 style="margin:0;color:${color};font-size:1.3em;">${s.f} MHz</h3>
+                    <div style="font-weight:600;margin:6px 0;">${s.p}</div>
+                    <div style="font-size:.85em;color:#888;margin-bottom:8px;">${s.l} (${s.c})</div>
+                    <div style="display:flex;justify-content:space-between;font-size:.8em;color:#555;border-top:1px solid #333;padding-top:6px;">
+                        <span>${s.w} kW</span><span>${s._d.toFixed(1)} km</span>${s.pi ? '<span>PI:'+s.pi+'</span>' : ''}
+                    </div>
+                    <button onclick="tuneFromMap('${s.f}')" style="width:100%;margin-top:10px;padding:8px;background:#00ffaa;color:#000;border:none;border-radius:4px;font-weight:bold;cursor:pointer;font-size:12px;">📻 TUNE TO ${s.f} MHz</button>
+                </div>`;
+                m.bindPopup(popHtml, { className: 'custom-popup' });
+
+                if (isCurrentFreq) {
+                    m.setStyle({ radius: 8, color: '#00ffaa', weight: 3, fillColor: '#00ffaa' });
+                }
+                markerRefs[s.f + '_' + s.la] = m;
+            }
+
+            // Build list
+            const listEl = document.getElementById('mapList');
+            listEl.innerHTML = '';
+            for (const s of visible) {
+                const color = MAP_COLORS[s.c] || '#888';
+                const fStr = parseFloat(s.f).toFixed(1);
+                const isCurrentFreq = currentBand === 1 && (currentFreq / 100).toFixed(2) === parseFloat(s.f).toFixed(2);
+                
+                const hasScanResult = mapScanResults[fStr] !== undefined;
+                const rssi = hasScanResult ? mapScanResults[fStr] : null;
+                const hasSignal = hasScanResult && rssi >= mapScanNoiseFloor;
+                const isDimmed = Object.keys(mapScanResults).length > 0 && !hasSignal;
+
+                const card = document.createElement('div');
+                card.style = `padding:10px 12px;background:${isCurrentFreq ? 'rgba(0,255,170,0.08)' : '#151515'};border:1px solid ${isCurrentFreq ? 'var(--accent)' : '#222'};border-radius:6px;margin-bottom:6px;cursor:pointer;transition:.15s;opacity:${isDimmed ? '0.3' : '1'};`;
+                
+                const signalBadge = hasScanResult ? 
+                    `<span style="font-size:0.75em; padding:2px 4px; border-radius:3px; background:${hasSignal ? 'rgba(0,255,170,0.2)' : 'rgba(255,0,0,0.1)'}; color:${hasSignal ? 'var(--accent)' : '#aa4444'};" title="Noise floor: ~${mapScanNoiseFloor.toFixed(0)} dBµV">${rssi.toFixed(0)} dBµV</span>` 
+                    : '';
+
+                card.innerHTML = `
+                    <div style="display:flex;justify-content:space-between;align-items:baseline;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-family:monospace;font-size:1.1em;font-weight:600;color:${color};">${s.f}</span>
+                            ${signalBadge}
+                        </div>
+                        <span style="font-size:.75em;color:#ff3366;font-weight:600;">${s._d.toFixed(1)} km</span>
+                    </div>
+                    <div style="font-size:.82em;margin-top:4px;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.p}</div>
+                    <div style="font-size:.7em;color:#555;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.l} (${s.c})</div>
+                    <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.65em;color:#444;font-family:monospace;"><span>${s.w} kW</span>${s.pi ? '<span>PI:'+s.pi+'</span>' : ''}</div>`;
+                card.addEventListener('click', () => {
+                    const key = s.f + '_' + s.la;
+                    const m = markerRefs[key];
+                    if (m) { dxMap.flyTo([s.la, s.lo], 11, { duration: 1 }); setTimeout(() => m.openPopup(), 600); }
+                });
+                card.addEventListener('dblclick', (e) => {
+                    e.preventDefault();
+                    tuneFromMap(s.f);
+                });
+                listEl.appendChild(card);
+            }
+
+            // User marker
+            if (!dxUserMarker) {
+                const icon = L.divIcon({ className:'', html:'<div style="width:16px;height:16px;background:#ff3366;border:3px solid white;border-radius:50%;box-shadow:0 0 20px #ff3366;"></div>', iconSize:[16,16], iconAnchor:[8,8] });
+                dxUserMarker = L.marker([uLat, uLon], { draggable:true, icon, zIndexOffset:9999 }).addTo(dxMap);
+                let dragTimer;
+                dxUserMarker.on('drag', e => {
+                    const p = e.target.getLatLng();
+                    document.getElementById('mapLat').value = p.lat.toFixed(4);
+                    document.getElementById('mapLon').value = p.lng.toFixed(4);
+                    clearTimeout(dragTimer);
+                    dragTimer = setTimeout(renderDXMap, 120);
+                });
+            } else {
+                dxUserMarker.setLatLng([uLat, uLon]);
+            }
+        }
+
+        function tuneFromMap(freqStr) {
+            const f = parseFloat(freqStr);
+            if (isNaN(f) || f <= 0) return;
+            // Switch to FM band if not already
+            if (currentBand !== 1) {
+                switchBand(1);
+            }
+            const intFreq = Math.round(f * 100);
+            tuneTo(intFreq);
+            // Flash the button to confirm
+            const btn = document.getElementById('dxMapBtn');
+            if (btn) {
+                btn.style.background = '#00ffaa';
+                btn.style.color = '#000';
+                btn.innerText = '📻 TUNED ' + f.toFixed(1) + ' MHz';
+                setTimeout(() => {
+                    btn.style.background = '#001133';
+                    btn.style.color = '#00ccff';
+                    btn.innerText = '📡 DX STATION MAP';
+                }, 2000);
+            }
+            // Re-render to highlight the new frequency
+            setTimeout(renderDXMap, 300);
+        }
+
+        async function startMapScan() {
+            const btn = document.getElementById('mapScanBtn');
+            if (mapScanActive) {
+                mapScanAbort = true;
+                btn.innerText = '📡 SCAN MAP STATIONS';
+                btn.style.background = 'rgba(0,255,170,0.1)';
+                btn.style.color = 'var(--accent)';
+                btn.style.borderColor = 'var(--accent)';
+                return;
+            }
+
+            const uLat = parseFloat(document.getElementById('mapLat').value);
+            const uLon = parseFloat(document.getElementById('mapLon').value);
+            if (isNaN(uLat) || isNaN(uLon)) return;
+
+            // Get unique FM frequencies from visible stations
+            const freqSet = new Set();
+            const stationMapByFreq = {};
+            for (const s of MAP_STATIONS) {
+                if (mapCountryFilter !== 'all' && s.c !== mapCountryFilter) continue;
+                const d = haversineMap(uLat, uLon, s.la, s.lo);
+                const r = Math.sqrt(s.w) * DX_FACTOR;
+                if (d <= r) {
+                    freqSet.add(s.f);
+                    if (!stationMapByFreq[s.f]) stationMapByFreq[s.f] = s;
+                }
+            }
+            const freqs = Array.from(freqSet).map(f => parseFloat(f)).sort((a, b) => a - b);
+            if (freqs.length === 0) return;
+
+            mapScanActive = true;
+            mapScanAbort = false;
+            mapScanResults = {}; // Reset previous results
+
+            if (currentBand !== 1) switchBand(1);
+
+            // Calculate dynamic noise floor from spectrum scan data if available
+            let mapNoiseFloor = 10;
+            const scanData = bandScans[1];
+            if (scanData && scanData.size > 50) {
+                const rssis = Array.from(scanData.values()).sort((a, b) => a - b);
+                mapNoiseFloor = rssis[Math.floor(rssis.length * 0.1)] + 3; // 10th percentile + 3dB margin
+            } else {
+                btn.innerText = 'MEASURING NOISE...';
+                let noiseSamples = [];
+                let testFreqs = [87.5, 98.0, 107.9]; // Try edges and middle of the band
+                for (let tf of testFreqs) {
+                    while (freqSet.has(tf.toFixed(1)) && tf <= 108.0) tf += 0.1;
+                    if (tf <= 108.0 && !mapScanAbort) {
+                        tuneTo(Math.round(tf * 100));
+                        await new Promise(r => setTimeout(r, 800)); // Let DSP settle
+                        noiseSamples.push(smoothRSSI);
+                    }
+                }
+                if (noiseSamples.length > 0) {
+                    mapNoiseFloor = (noiseSamples.reduce((a, b) => a + b, 0) / noiseSamples.length) + 4; // Average + 4dB margin
+                }
+            }
+            mapScanNoiseFloor = Math.max(5, mapNoiseFloor); // Sanity check floor
+            
+            btn.innerText = '⏹ STOP SCAN (0/' + freqs.length + ')';
+            btn.style.background = '#220000';
+            btn.style.borderColor = '#ff4444';
+            btn.style.color = '#ff4444';
+
+            for (let i = 0; i < freqs.length; i++) {
+                if (mapScanAbort) break;
+                const fStr = freqs[i].toFixed(1);
+                const intF = Math.round(freqs[i] * 100);
+                tuneTo(intF);
+                
+                // Pan map to the station being scanned
+                const targetStation = stationMapByFreq[fStr];
+                if (targetStation && dxMap) {
+                    dxMap.panTo([targetStation.la, targetStation.lo]);
+                }
+                
+                btn.innerText = '⏹ STOP (' + (i+1) + '/' + freqs.length + ') ' + fStr + ' MHz';
+                
+                // Wait for signal to settle
+                await new Promise(r => setTimeout(r, 1200));
+                
+                // Record the actual signal strength
+                mapScanResults[fStr] = smoothRSSI;
+                renderDXMap(); // update list highlights in real-time
+            }
+
+            mapScanActive = false;
+            mapScanAbort = false;
+            btn.innerText = '📡 SCAN MAP STATIONS';
+            btn.style.background = 'rgba(0,255,170,0.1)';
+            btn.style.borderColor = 'var(--accent)';
+            btn.style.color = 'var(--accent)';
         }
     </script>
 </body>

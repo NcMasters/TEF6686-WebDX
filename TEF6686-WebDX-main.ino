@@ -67,7 +67,7 @@ uint8_t scanMode = 0; // 0 = Off, 1 = Listen Scan, 2 = Blitz Scan
 bool i2cActive = true; 
 bool smartI2C = true; 
 uint8_t imsMode = 1;   // 0=Off, 1=Normal
-bool eqActive = false;
+bool eqActive = true;
 bool nbActive = true;
 uint16_t lastStereoBlend = 1000; 
 unsigned long lastTuneTime = 0;
@@ -79,7 +79,15 @@ bool lastDXState = false;
 // --- WiFi + WebSocket ---
 String ssid     = "YOUR_WIFI_SSID";
 String password = "YOUR_WIFI_PASSWORD";
+String startupCmds = "";
+String currentUiState = "{}";
+String audioServerIp = ""; 
 bool wifiReady = false;
+enum WifiState { WF_OFF, WF_CONNECTING, WF_CONNECTED, WF_AP };
+WifiState wifiState = WF_OFF;
+unsigned long wifiTimer = 0;
+bool servicesStarted = false;
+uint8_t wifiMode = 1; // 0=OFF, 1=STA, 2=AP (Persistent)
 
 // --- I2C Communication with Retries ---
 void tef_send(uint8_t m, uint8_t c, uint8_t index, uint16_t* p, uint8_t ct, bool stop = true) {
@@ -207,11 +215,29 @@ void setBW(uint16_t mode, uint16_t limit) {
 }
 
 void sendUpdate(bool forced = false); // Forward declaration
+void triggerReport(); // Forward declaration
 
 // --- Helper: send JSON to both Serial AND WebSocket clients ---
 void broadcast(const char* msg) {
   Serial.println(msg);
   if (wifiReady) webSocket.broadcastTXT(msg, strlen(msg));
+}
+
+// --- FAST SCAN TELEMETRY ---
+void sendScanUpdate() {
+  if(!i2cActive) return;
+  uint8_t mod = getModule();
+  tef_send(mod, 128, 1, NULL, 0, false);
+  Wire.requestFrom(TEF_ADDR, 4); 
+  if(Wire.available() >= 4) {
+    Wire.read(); Wire.read(); // Skip status
+    float rssi = (int16_t)((Wire.read()<<8)|Wire.read()) / 10.0;
+    char buf[64];
+    snprintf(buf, sizeof(buf), "{\"f\":%u,\"s\":%.1f}", currentFreq, rssi);
+    broadcast(buf);
+  } else {
+    while(Wire.available()) Wire.read();
+  }
 }
 
 // --- DUAL-MODE TUNING ENGINE ---
@@ -226,7 +252,7 @@ void tuneRadio(uint16_t f, uint8_t mode) {
       uint16_t p[2] = {1, currentFreq}; 
       tef_send(mod, 1, 1, p, 2); 
       delay(25);              
-      sendUpdate(true);           
+      sendScanUpdate();           
       return;                 
   } 
   else if (scanMode == 1) {
@@ -234,7 +260,7 @@ void tuneRadio(uint16_t f, uint8_t mode) {
       uint16_t p[2] = {1, currentFreq}; 
       tef_send(mod, 1, 1, p, 2); 
       delay(80);              
-      sendUpdate(true);           
+      sendScanUpdate();           
       return;    
   }
   
@@ -418,12 +444,12 @@ void processCommand(const char* input) {
   else if (cmd == 'a') setBW(1, currentMode == 1 ? 2360 : 60);  // AUTO Mode (mode=1)
   else if (cmd == 'n') setBW(0, currentMode == 1 ? 560 : 30);   // FIXED NARROW (mode=0)
   else if (cmd == 'B') { uint16_t b = (uint16_t)atoi(input + 1); setBW(0, b); } // FIXED CUSTOM (mode=0)
-  else if (cmd == 'G') { amAgcStart = (uint16_t)atoi(input + 1); syncDSP(); saveDSP(); }
-  else if (cmd == 'N') { amAudioNB = (uint16_t)atoi(input + 1); syncDSP(); saveDSP(); }
-  else if (cmd == 'T') { amSoftMute = (uint16_t)atoi(input + 1); syncDSP(); saveDSP(); }
-  else if (cmd == 'h') { highCut = !highCut; syncDSP(); saveDSP(); }
-  else if (cmd == 'l') { lowCut = !lowCut; syncDSP(); saveDSP(); }
-  else if (cmd == 'I') { i2cActive = !i2cActive; }
+  else if (cmd == 'G') { amAgcStart = (uint16_t)atoi(input + 1); syncDSP(); saveDSP(); triggerReport(); }
+  else if (cmd == 'N') { amAudioNB = (uint16_t)atoi(input + 1); syncDSP(); saveDSP(); triggerReport(); }
+  else if (cmd == 'T') { amSoftMute = (uint16_t)atoi(input + 1); syncDSP(); saveDSP(); triggerReport(); }
+  else if (cmd == 'h') { highCut = !highCut; syncDSP(); saveDSP(); triggerReport(); }
+  else if (cmd == 'l') { lowCut = !lowCut; syncDSP(); saveDSP(); triggerReport(); }
+  else if (cmd == 'I') { i2cActive = !i2cActive; triggerReport(); }
   else if (cmd == 'm') { uint16_t hardMute[] = {(uint16_t)(-60 * 10)}; tef_send(48, 10, 1, hardMute, 1); }
   else if (cmd == 'u') { uint16_t v[] = {(uint16_t)(volume * 10)}; tef_send(48, 10, 1, v, 1); }
   else if (cmd == 'O') { uint16_t p[] = {2, 200}; tef_send(32, 66, 1, p, 2); }
@@ -444,25 +470,41 @@ void processCommand(const char* input) {
       lastTuneTime = millis(); // Reset timer on scan exit
       uint16_t v[] = {(uint16_t)(volume * 10)}; tef_send(48, 10, 1, v, 1); 
   }
-  else if (cmd == 'W') {
-      // Format: "Wmod,cmd,idx,v1,v2..."
-      char* token = strtok((char*)input + 1, ",");
-      if (token) {
-        uint8_t mod = atoi(token);
-        token = strtok(NULL, ",");
-        if (token) {
-          uint8_t command = atoi(token);
-          token = strtok(NULL, ",");
+  else if (cmd == 'w' || cmd == 'W') {
+      // Check if it's a WiFi command (w0/w1/w2) or a raw TEF command (Wmod,...)
+      if (cmd == 'W' && strchr(input, ',')) {
+          // Format: "Wmod,cmd,idx,v1,v2..."
+          char* token = strtok((char*)input + 1, ",");
           if (token) {
-            uint8_t idx = atoi(token);
-            uint16_t vals[16];
-            uint8_t len = 0;
-            while ((token = strtok(NULL, ",")) != NULL && len < 16) {
-              vals[len++] = atoi(token);
+            uint8_t mod = atoi(token);
+            token = strtok(NULL, ",");
+            if (token) {
+              uint8_t command = atoi(token);
+              token = strtok(NULL, ",");
+              if (token) {
+                uint8_t idx = atoi(token);
+                uint16_t vals[16];
+                uint8_t len = 0;
+                while ((token = strtok(NULL, ",")) != NULL && len < 16) {
+                  vals[len++] = atoi(token);
+                }
+                if (len > 0) tef_send(mod, command, idx, vals, len);
+              }
             }
-            if (len > 0) tef_send(mod, command, idx, vals, len);
           }
-        }
+      } else {
+          // WiFi Mode: w0 (OFF), w1 (STA), w2 (AP)
+          int val = atoi(input + 1);
+          Serial.printf("[WiFi] Switching to mode %d...\n", val);
+          preferences.begin("tef6686", false);
+          preferences.putUChar("wifiMode", (uint8_t)val);
+          preferences.end();
+          // Always restart to apply mode change cleanly.
+          // For w0 (OFF): restarting with wifiMode=0 saved boots into DX mode.
+          // For w1/w2: restart re-initialises WiFi stack.
+          Serial.printf("[WiFi] Mode %d saved. Restarting ESP32...\n", val);
+          delay(500);
+          ESP.restart();
       }
   }
   else if (cmd == 'C') {
@@ -482,34 +524,35 @@ void processCommand(const char* input) {
       preferences.begin("tef6686", false);
       preferences.putString("uiState", input + 1);
       preferences.end();
+      triggerReport();
   }
   else if (cmd == 'Z') {
       smartI2C = (input[1] == '1');
       preferences.begin("tef6686", false);
       preferences.putBool("smartI2C", smartI2C);
       preferences.end();
+      triggerReport();
   }
-  else if (cmd == 'L') { lowCut = (atoi(input + 1) == 1); syncDSP(); saveDSP(); }
-  else if (cmd == 'D') { deemphMode = (uint16_t)atoi(input + 1); syncDSP(); saveDSP(); }
+  else if (cmd == 'L') { lowCut = (atoi(input + 1) == 1); syncDSP(); saveDSP(); triggerReport(); }
+  else if (cmd == 'D') { deemphMode = (uint16_t)atoi(input + 1); syncDSP(); saveDSP(); triggerReport(); }
   else if (cmd == 'U') { 
       autoDX = (atoi(input + 1) == 1); 
       preferences.begin("tef6686", false);
       preferences.putBool("autoDX", autoDX);
       preferences.end();
+      triggerReport();
   }
-  else if (cmd == 'Y') { amAtten = (uint16_t)atoi(input + 1); syncDSP(); saveDSP(); }
-  else if (cmd == 'K') { amCoChan = (uint16_t)atoi(input + 1); syncDSP(); saveDSP(); }
+  else if (cmd == 'M') { imsMode = (uint8_t)atoi(input + 1); syncDSP(); saveDSP(); triggerReport(); }
+  else if (cmd == 'E') { eqActive = (atoi(input + 1) == 1); syncDSP(); saveDSP(); triggerReport(); }
+  else if (cmd == 'H') { highCut = (atoi(input + 1) == 1); syncDSP(); saveDSP(); triggerReport(); }
+  else if (cmd == 'Y') { amAtten = (uint16_t)atoi(input + 1); syncDSP(); saveDSP(); triggerReport(); }
+  else if (cmd == 'K') { amCoChan = (uint16_t)atoi(input + 1); syncDSP(); saveDSP(); triggerReport(); }
+  else if (cmd == 'i') {
+      audioServerIp = input + 1;
+      triggerReport();
+  }
   else if (cmd == 'R') {
-      preferences.begin("tef6686", true);
-      String cmds = preferences.getString("startupCmds", "");
-      String uiState = preferences.getString("uiState", "{}");
-      int savedSda = preferences.getInt("sda", 4);
-      int savedScl = preferences.getInt("scl", 5);
-      preferences.end();
-      char buf[2048];
-      snprintf(buf, sizeof(buf), "{\"initCmds\":\"%s\",\"uiState\":%s,\"sda\":%d,\"scl\":%d,\"smartI2C\":%d,\"ims\":%d,\"eq\":%d,\"nb\":%d,\"hc\":%d,\"lc\":%d,\"deemph\":%d,\"autoDX\":%d,\"am_atten\":%d,\"am_cochan\":%d,\"am_agc\":%d,\"am_audio_nb\":%d,\"am_softmute\":%d,\"ssid\":\"%s\"}", 
-               cmds.c_str(), uiState.c_str(), savedSda, savedScl, smartI2C ? 1 : 0, imsMode, eqActive ? 1 : 0, nbActive ? 1 : 0, highCut ? 1 : 0, lowCut ? 1 : 0, deemphMode, autoDX ? 1 : 0, amAtten, amCoChan, amAgcStart, amAudioNB, amSoftMute, ssid.c_str());
-      broadcast(buf);
+      triggerReport();
   }
   else if (cmd == 'V') {
       // Format: "Vssid,password"
@@ -527,25 +570,44 @@ void processCommand(const char* input) {
           ESP.restart();
       }
   }
+  else if (cmd == '?') {
+      Serial.println("\n--- SYSTEM DIAGNOSTICS ---");
+      Serial.printf("WiFi Mode: %d (0=OFF, 1=STA, 2=AP)\n", wifiMode);
+      Serial.printf("WiFi Status: %d (3=Connected, 6=Lost)\n", WiFi.status());
+      Serial.printf("SSID: %s\n", ssid.c_str());
+      Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
+      Serial.printf("mDNS: tef6686.local\n");
+      Serial.printf("I2C Pins: SDA=%d, SCL=%d\n", sdaPin, sclPin);
+      Serial.printf("TEF6686 Status: %s\n", i2cActive ? "Active" : "Disabled");
+      Serial.println("--------------------------");
+  }
 }
 
 // --- WebSocket Event Handler ---
 void wsEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
   switch (type) {
+    case WStype_CONNECTED:
+      Serial.printf("[WS] Client #%u connected\n", num);
+      triggerReport(); // Send settings to new client
+      sendUpdate(true); // Send signal telemetry to new client
+      break;
     case WStype_DISCONNECTED:
       Serial.printf("[WS] Client #%u disconnected\n", num);
       break;
-    case WStype_CONNECTED:
-      Serial.printf("[WS] Client #%u connected\n", num);
-      sendUpdate(true); // Send current state immediately to new client
-      break;
     case WStype_TEXT: {
-      // Process commands from WebSocket safely, avoiding String allocation
-      if (length > 0 && length < 512) {
-        char wsCmd[512];
-        memcpy(wsCmd, payload, length);
-        wsCmd[length] = '\0';
-        processCommand(wsCmd);
+      // Process commands from WebSocket safely
+      if (length > 0 && length < 2048) {
+        char* wsCmd = (char*)malloc(length + 1);
+        if (wsCmd) {
+          memcpy(wsCmd, payload, length);
+          wsCmd[length] = '\0';
+          if (wsCmd[0] == '*') {
+            broadcast(wsCmd + 1);
+          } else {
+            processCommand(wsCmd);
+          }
+          free(wsCmd);
+        }
       }
       break;
     }
@@ -628,90 +690,87 @@ void setup() {
     Serial.println("[System] TEF6686 NOT FOUND at 0x64! Check wiring/power.");
   }
 
-  // --- WiFi Setup (non-blocking: runs in background) ---
+  // --- WiFi Setup (non-blocking) ---
+  preferences.begin("tef6686", true);
+  wifiMode = preferences.getUChar("wifiMode", 1);
   ssid = preferences.getString("ssid", "YOUR_WIFI_SSID");
   password = preferences.getString("pass", "YOUR_WIFI_PASSWORD");
+  preferences.end();
   
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid.c_str(), password.c_str());
-  Serial.print("[WiFi] Connecting");
-
-  // Wait up to 8 seconds for WiFi
-  unsigned long wifiStart = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 8000) {
-    delay(250);
-    Serial.print(".");
-  }
-
-    if (WiFi.status() == WL_CONNECTED) {
-    wifiReady = true;
-    WiFi.setSleep(false); // CRITICAL: Prevent ESP32 from dropping mDNS broadcast packets
-    Serial.println();
-    Serial.print("[WiFi] Connected! IP: ");
-    Serial.println(WiFi.localIP());
-
-    // Explicitly start MDNS so it's ready before OTA binds to it
-    if (MDNS.begin("tef6686")) {
-      Serial.println("[WiFi] mDNS started: tef6686.local");
-    }
-
-    // --- OTA Setup ---
-    ArduinoOTA.setHostname("tef6686");
-    
-    ArduinoOTA.onStart([]() {
-      Serial.println("[OTA] Start updating");
-      // CRITICAL: Disable telemetry and RDS polling so the ESP32 has enough resources to flash
-      i2cActive = false; 
-      scanMode = 0;
-    });
-    ArduinoOTA.onEnd([]() {
-      Serial.println("\n[OTA] End");
-    });
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-      Serial.printf("[OTA] Progress: %u%%\r", (progress / (total / 100)));
-    });
-    ArduinoOTA.onError([](ota_error_t error) {
-      Serial.printf("[OTA] Error[%u]: ", error);
-      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-      else if (error == OTA_END_ERROR) Serial.println("End Failed");
-    });
-
-    ArduinoOTA.begin();
-    Serial.println("[WiFi] OTA server started (mDNS: tef6686.local)");
-
-    // Add our custom services to the mDNS instance started by ArduinoOTA
-    MDNS.addService("ws", "tcp", 81);
-
-    server.on("/", []() {
-      server.sendHeader("Content-Encoding", "gzip");
-      server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      server.send_P(200, "text/html; charset=UTF-8", (const char*)WEB_HTML, WEB_HTML_LEN);
-    });
-
-    server.on("/stations_db.js", []() {
-      server.sendHeader("Content-Encoding", "gzip");
-      server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      server.send_P(200, "application/javascript; charset=UTF-8", (const char*)WEB_DB, WEB_DB_LEN);
-    });
-
-    server.begin();
-    Serial.println("[WiFi] HTTP server on port 80");
-
-    webSocket.begin();
-    webSocket.onEvent(wsEvent);
-    Serial.println("[WiFi] WebSocket server on port 81");
+  Serial.printf("[System] WiFi Mode: %d\n", wifiMode);
+  
+  if (wifiMode == 1) {
+      if (ssid == "YOUR_WIFI_SSID") {
+          Serial.println("[WiFi] WARNING: Default SSID detected. Use 'Vssid,pass' to set credentials.");
+      }
+      WiFi.mode(WIFI_STA);
+      WiFi.begin(ssid.c_str(), password.c_str());
+      wifiState = WF_CONNECTING;
+      wifiTimer = millis();
+      Serial.printf("[WiFi] Connecting to %s...\n", ssid.c_str());
+  } else if (wifiMode == 2) {
+      Serial.println("[WiFi] Starting Emergency Hotspot: TEF6686_Hotspot");
+      WiFi.mode(WIFI_AP);
+      WiFi.softAP("TEF6686_Hotspot", "12345678"); 
+      wifiState = WF_AP;
+      startServices();
   } else {
-    Serial.println();
-    Serial.println("[WiFi] Connection failed — running USB-only mode");
+      WiFi.mode(WIFI_OFF);
+      wifiState = WF_OFF;
+      Serial.println("[WiFi] Radio is OFF. Use Serial 'w1' to re-enable.");
   }
+}
+
+void startServices() {
+  if (servicesStarted) return;
+  servicesStarted = true;
+  wifiReady = true;
+  
+  WiFi.setSleep(false); // CRITICAL: Prevent ESP32 from dropping mDNS broadcast packets
+  
+  if (MDNS.begin("tef6686")) {
+    Serial.println("[WiFi] mDNS started: tef6686.local");
+  }
+
+  // --- OTA Setup ---
+  ArduinoOTA.setHostname("tef6686");
+  ArduinoOTA.onStart([]() {
+    Serial.println("[OTA] Start updating");
+    i2cActive = false; 
+    scanMode = 0;
+  });
+  ArduinoOTA.onEnd([]() { Serial.println("\n[OTA] End"); });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("[OTA] Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("[OTA] Error[%u]\n", error);
+  });
+  ArduinoOTA.begin();
+
+  MDNS.addService("ws", "tcp", 81);
+
+  server.on("/", []() {
+    server.sendHeader("Content-Encoding", "gzip");
+    server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    server.send_P(200, "text/html; charset=UTF-8", (const char*)WEB_HTML, WEB_HTML_LEN);
+  });
+
+  server.on("/stations_db.js", []() {
+    server.sendHeader("Content-Encoding", "gzip");
+    server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    server.send_P(200, "application/javascript; charset=UTF-8", (const char*)WEB_DB, WEB_DB_LEN);
+  });
+
+  server.begin();
+  webSocket.begin();
+  webSocket.onEvent(wsEvent);
+  Serial.println("[WiFi] Services started (HTTP:80, WS:81, OTA)");
 }
 
 void loop() {
   // Handle Serial commands efficiently without String allocation
-  static char serialBuf[64];
+  static char serialBuf[2048];
   static size_t serialIdx = 0;
 
   while (Serial.available() > 0) {
@@ -719,7 +778,11 @@ void loop() {
     if (c == '\n' || c == '\r') {
       if (serialIdx > 0) {
         serialBuf[serialIdx] = '\0';
-        processCommand(serialBuf);
+        if (serialBuf[0] == '*') {
+          broadcast(serialBuf + 1);
+        } else {
+          processCommand(serialBuf);
+        }
         serialIdx = 0;
       }
     } else if (serialIdx < sizeof(serialBuf) - 1) {
@@ -727,33 +790,59 @@ void loop() {
     }
   }
 
-  // Handle HTTP requests
-  if (wifiReady) {
+  // --- WiFi State Machine ---
+  static unsigned long lastWifiCheck = 0;
+  if (millis() - lastWifiCheck > 1000) {
+    lastWifiCheck = millis();
+    
+    switch (wifiState) {
+      case WF_CONNECTING:
+        if (WiFi.status() == WL_CONNECTED) {
+          wifiState = WF_CONNECTED;
+          Serial.println("\n[WiFi] Connected! IP: " + WiFi.localIP().toString());
+          startServices();
+        } else if (millis() - wifiTimer > 15000) {
+          Serial.println("\n[WiFi] Connection failed. Starting Config AP: TEF6686_Setup");
+          WiFi.mode(WIFI_AP_STA);
+          WiFi.softAP("TEF6686_Setup");
+          wifiState = WF_AP;
+          startServices(); // Start server on AP so user can configure
+        }
+        break;
+        
+      case WF_CONNECTED:
+        if (WiFi.status() != WL_CONNECTED) {
+          Serial.println("[WiFi] Connection lost, retrying...");
+          wifiState = WF_CONNECTING;
+          wifiTimer = millis();
+          wifiReady = false;
+        }
+        break;
+        
+      case WF_AP:
+        if (WiFi.status() == WL_CONNECTED) {
+          Serial.println("[WiFi] Connected! Closing AP.");
+          WiFi.softAPdisconnect(true);
+          WiFi.mode(WIFI_STA);
+          wifiState = WF_CONNECTED;
+        }
+        break;
+    }
+  }
+
+  // Handle Web services if started
+  if (servicesStarted) {
     server.handleClient();
     webSocket.loop();
     ArduinoOTA.handle();
   }
 
-  // Reconnect WiFi if it drops
-  static unsigned long lastWifiCheck = 0;
-  if (wifiReady && millis() - lastWifiCheck > 10000) {
-    lastWifiCheck = millis();
-    if (WiFi.status() != WL_CONNECTED) {
-      Serial.println("[WiFi] Lost connection, reconnecting...");
-      WiFi.reconnect();
-    }
-  }
-
   // --- Smart I2C Quiet Mode ---
   // Determine if we should be in quiet mode this iteration.
-  // Quiet = smartI2C enabled + weak signal + 10s since last tune
+  // Quiet = smartI2C enabled (Slow down I2C to 5 seconds)
   bool shouldBeQuiet = false;
   if (smartI2C && scanMode == 0 && i2cActive) {
-      // stereo_blend: 0 = full stereo (strong), 1000 = full mono (weak)
-      // >800 means under 20% stereo = weak signal
-      bool weakSignal = (currentMode != 1) || (lastStereoBlend > 800);
-      bool timedOut = (millis() - lastTuneTime > 10000);
-      shouldBeQuiet = weakSignal && timedOut;
+      shouldBeQuiet = true;
   }
   i2cQuiet = shouldBeQuiet;
 
@@ -768,7 +857,7 @@ void loop() {
 
   // RDS polling (skip entirely in quiet mode)
   static unsigned long lastRDS = 0;
-  if (!i2cQuiet && millis() - lastRDS > 40) {
+  if (!i2cQuiet && millis() - lastRDS > 85) {
     lastRDS = millis();
     if(scanMode == 0) pollRDS();
   }
@@ -791,4 +880,13 @@ void loop() {
           }
       }
   }
+}
+void triggerReport() {
+  char buf[1024];
+  const char* stStr = (wifiState == WF_CONNECTED) ? "CONNECTED" : (wifiState == WF_AP ? "AP_MODE" : (wifiState == WF_OFF ? "OFF" : "CONNECTING"));
+  
+  // Use memory-cached values for speed instead of Preferences flash-reads
+  snprintf(buf, sizeof(buf), "{\"initCmds\":\"%s\",\"uiState\":%s,\"sda\":%d,\"scl\":%d,\"smartI2C\":%d,\"ims\":%d,\"eq\":%d,\"nb\":%d,\"hc\":%d,\"lc\":%d,\"deemph\":%d,\"autoDX\":%d,\"am_atten\":%d,\"am_cochan\":%d,\"am_agc\":%d,\"am_audio_nb\":%d,\"am_softmute\":%d,\"ssid\":\"%s\",\"ip\":\"%s\",\"audio_ip\":\"%s\",\"wifiStatus\":\"%s\",\"wifiMode\":%d,\"scan\":%d}", 
+           startupCmds.c_str(), currentUiState.c_str(), sdaPin, sclPin, smartI2C ? 1 : 0, imsMode, eqActive ? 1 : 0, nbActive ? 1 : 0, highCut ? 1 : 0, lowCut ? 1 : 0, deemphMode, autoDX ? 1 : 0, amAtten, amCoChan, amAgcStart, amAudioNB, amSoftMute, ssid.c_str(), WiFi.localIP().toString().c_str(), audioServerIp.c_str(), stStr, wifiMode, scanMode);
+  broadcast(buf);
 }
